@@ -1,4 +1,4 @@
-# API Contract — Dashboard
+# API Contract : Dashboard
 
 This document is the **source of truth** between the backend and frontend.
 Every route used by the frontend must be defined here **before** it is coded.
