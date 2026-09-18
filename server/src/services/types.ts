@@ -17,6 +17,7 @@ export interface OAuthConfig {
   tokenUrl: string;
   clientId: string;
   clientSecret: string;
+  redirectUri: string;
   scope: string;
 }
 
