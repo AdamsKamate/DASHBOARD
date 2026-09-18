@@ -1,0 +1,68 @@
+services:
+  server:
+    build: ./server
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://dashboard:dashboard@db:5432/dashboard
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-devsecret}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-devkey_change_me_32_bytes}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  client_web:
+    build: ./client_web
+    ports:
+      - "8081:3000"
+    depends_on:
+      - server
+
+  worker:
+    build: ./server
+    command: ["node", "dist/jobs/worker.js"]
+    environment:
+      - DATABASE_URL=postgres://dashboard:dashboard@db:5432/dashboard
+      - REDIS_URL=redis://redis:6379
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-devkey_change_me_32_bytes}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=dashboard
+      - POSTGRES_PASSWORD=dashboard
+      - POSTGRES_DB=dashboard
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
