@@ -1,9 +1,28 @@
 import { ServiceProvider, WidgetDefinition } from "./types";
 
+// Open-Meteo response types. res.json() returns `unknown` in strict mode:
+// without these interfaces, accessing any property raises a TS18046 error.
+interface GeoResponse {
+  results?: Array<{ name: string; latitude: number; longitude: number }>;
+}
+
+interface CurrentWeatherResponse {
+  current_weather: { temperature: number; windspeed: number };
+}
+
+interface ForecastResponse {
+  daily: {
+    time: string[];
+    temperature_2m_max: number[];
+    temperature_2m_min: number[];
+    precipitation_sum: number[];
+  };
+}
+
 async function geocode(city: string) {
   const geo = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
-  ).then((r) => r.json());
+  ).then((r) => r.json() as Promise<GeoResponse>);
 
   const location = geo.results?.[0];
   if (!location) {
@@ -22,7 +41,7 @@ const cityTemperature: WidgetDefinition = {
 
     const weather = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true`
-    ).then((r) => r.json());
+    ).then((r) => r.json() as Promise<CurrentWeatherResponse>);
 
     return {
       city: location.name,
@@ -46,7 +65,7 @@ const weatherForecast: WidgetDefinition = {
 
     const forecast = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=${days}&timezone=auto`
-    ).then((r) => r.json());
+    ).then((r) => r.json() as Promise<ForecastResponse>);
 
     return {
       city: location.name,
