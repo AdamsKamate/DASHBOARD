@@ -1,10 +1,10 @@
-=============
+-- =============
 -- PostgreSQL schema : Dashboard
 -- 6 tables covering all functional requirements of the assignment.
 --
 -- This file is mounted into /docker-entrypoint-initdb.d/ by docker-compose,
 -- so it is executed automatically when the volume is first created.
-============
+-- ============
 
 -- gen_random_uuid() is provided by pgcrypto (included by default in postgres:16).
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
