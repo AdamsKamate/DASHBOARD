@@ -1,6 +1,20 @@
-// server/src/routes/about.ts
 import { Router, Request, Response } from "express";
 
+
+/*
+ Extrait l'IP du client.
+ Derriere Docker, Express renvoie souvent une IPv6-mapped IPv4
+ (::ffff:172.18.0.1) : on la normalise pour rester conforme à une IPv4 simple.
+ */
+function getClientHost(req: Request): string {
+  const raw =
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() ||
+    req.socket.remoteAddress ||
+    req.ip ||
+    "";
+  return raw.replace(/^::ffff:/, "");
+}
+ 
 const router = Router();
 
 router.get("/about.json", (req: Request, res: Response) => {
