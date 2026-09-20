@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cookieParser from "cookie-parser";
 import aboutRouter from "./routes/about";
 import authRouter from "./routes/auth";
 import { runMigrations } from "./db/migrate";
@@ -14,6 +15,8 @@ const PORT = 8080; // required by the assignment, do not make configurable
 app.set("trust proxy", true);
 
 app.use(express.json());
+// Parses the token cookie set by the login route into req.cookies.
+app.use(cookieParser());
 app.use(aboutRouter);
 app.use(authRouter);
 
