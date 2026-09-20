@@ -1,7 +1,15 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
-import { createUser, verifyUserByToken } from "../db/repositories/users";
-import { hashPassword } from "../lib/password";
+import {
+  createUser,
+  verifyUserByToken,
+  findUserByEmail,
+  findUserById,
+  toPublicUser,
+} from "../db/repositories/users";
+import { hashPassword, verifyPassword } from "../lib/password";
+import { signToken } from "../lib/jwt";
+import { requireAuth } from "../middleware/auth";
 import { sendVerificationEmail, isMailerConfigured } from "../lib/mailer";
 import {
   validateEmail,
@@ -15,6 +23,14 @@ const router = Router();
  PostgreSQL error code for a unique constraint violation.
 */
 const PG_UNIQUE_VIOLATION = "23505";
+
+/*
+ Bcrypt hash of a value nobody knows, used to keep the login timing constant
+ when the email does not exist. Comparing against it costs the same as a real
+ comparison, so response time does not reveal whether an account exists.
+ */
+const DUMMY_HASH =
+  "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
 /*
  Generates the confirmation token sent by email.
@@ -104,9 +120,6 @@ router.post("/auth/register", async (req: Request, res: Response) => {
  GET /auth/verify?token=<verification_token>
  Confirms an account from the link received by email.
 
- The repository clears the token during the update, so a link works only once.
- A second attempt therefore matches no row and returns 400, which also covers
- unknown and already-used tokens with the same response.
  Responses: 200 confirmed, 400 invalid or already used token.
  */
 router.get("/auth/verify", async (req: Request, res: Response) => {
@@ -132,6 +145,117 @@ router.get("/auth/verify", async (req: Request, res: Response) => {
     console.error("[auth] verification failed:", (err as Error).message);
     return res.status(500).json({ error: "Internal server error" });
   }
+});
+
+/*
+ Cookie options for the JWT.
+ httpOnly: unreadable by page JavaScript
+ */
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, same as the token lifetime
+};
+
+/*
+ POST /auth/login
+ Verifies credentials, then that the account is confirmed (C3), then issues a
+ JWT. The token is returned in the body and also set as a cookie, so both
+ browser clients and command-line clients are covered.
+ Responses: 200 with token, 401 invalid credentials, 403 unconfirmed account.
+ */
+router.post("/auth/login", async (req: Request, res: Response) => {
+  const { email, password } = req.body ?? {};
+
+  if (typeof email !== "string" || typeof password !== "string") {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+
+  try {
+    const user = await findUserByEmail(normalizeEmail(email));
+
+    // The password is compared even when no user was found, against a dummy
+    // hash, so that both branches take the same amount of time. Returning
+    // early here would make "unknown email" measurably faster than "wrong
+    // password", which leaks which addresses are registered.
+    const passwordMatches = user
+      ? await verifyPassword(password, user.password_hash)
+      : await verifyPassword(password, DUMMY_HASH);
+
+    if (!user || !passwordMatches) {
+      // Deliberately identical for both cases: never reveal whether the email
+      // exists.
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // C3: an unconfirmed account cannot access the platform. This check comes
+    // after the password check so that an attacker cannot use it to discover
+    // which addresses are registered.
+    if (!user.is_verified) {
+      return res.status(403).json({ error: "Account not confirmed" });
+    }
+
+    const token = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    res.cookie("token", token, COOKIE_OPTIONS);
+
+    return res.status(200).json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error("[auth] login failed:", (err as Error).message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/*
+ GET /auth/me
+ Returns the current user. Protected by requireAuth.
+ */
+router.get("/auth/me", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = await findUserById(req.user!.userId);
+
+    if (!user) {
+      // Valid token, but the account no longer exists.
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const publicUser = toPublicUser(user);
+    return res.status(200).json({
+      id: publicUser.id,
+      email: publicUser.email,
+      role: publicUser.role,
+    });
+  } catch (err) {
+    console.error("[auth] me failed:", (err as Error).message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/*
+ POST /auth/logout
+ Clears the cookie.
+ The token itself stays valid until it expires: a JWT cannot be revoked. This
+ only ends the browser session, which is why the lifetime is kept short.
+ */
+router.post("/auth/logout", (_req: Request, res: Response) => {
+  // maxAge is deliberately omitted here: clearCookie sets the expiry itself,
+  // and passing it is deprecated in Express 5. The other options must match
+  // those used when setting the cookie, otherwise the browser keeps it.
+  const { maxAge, ...clearOptions } = COOKIE_OPTIONS;
+  res.clearCookie("token", clearOptions);
+  return res.status(204).send();
 });
 
 export default router;
