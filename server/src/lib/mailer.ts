@@ -1,12 +1,12 @@
 import nodemailer, { Transporter } from "nodemailer";
 
-// Envoi d'emails.
+// Email delivery.
 
 
 let transporter: Transporter | null = null;
 
 /*
- Indique si un serveur SMTP est configuré.
+ Indicates whether an SMTP server is configured.
  */
 export function isMailerConfigured(): boolean {
   return Boolean(process.env.SMTP_HOST);
@@ -20,10 +20,10 @@ function getTransporter(): Transporter {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
-    // Le chiffrement implicite n'existe que sur le port 465. Sur 587 et 1025,
+    // Implicit TLS is used only on port 465. On ports 587 and 1025,
     secure: port === 465,
-    // MailHog n'exige aucune authentification : transmettre un objet `auth`
-    // vide ferait échouer la connexion, on l'omet donc complètement.
+    // MailHog does not require authentication: passing an empty `auth` object
+    // would cause the connection to fail, so it is omitted completely.
     auth: process.env.SMTP_USER
       ? {
           user: process.env.SMTP_USER,
@@ -43,10 +43,10 @@ export interface MailOptions {
 }
 
 /*
- Envoie un email.
- Renvoie false en cas d'échec plutôt que de lever une exception : un serveur
- SMTP indisponible ne doit pas annuler une inscription déjà enregistrée en
- base.
+ Sends an email.
+ Returns false on failure instead of throwing an exception: an unavailable
+ SMTP server must not cancel a registration that has already been stored in
+ the database.
  */
 export async function sendMail(options: MailOptions): Promise<boolean> {
   if (!isMailerConfigured()) {
@@ -69,8 +69,8 @@ export async function sendMail(options: MailOptions): Promise<boolean> {
 }
 
 /*
- Envoie l'email de confirmation d'inscription (C3).
- Le message est fourni en texte brut ET en HTML
+ Sends the registration confirmation email (C3).
+ The message is provided as both plain text and HTML.
  */
 export async function sendVerificationEmail(
   email: string,
