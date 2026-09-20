@@ -28,8 +28,8 @@ services:
       - ./client_web/src:/app/src
     restart: unless-stopped
 
-  # Le worker reste declare mais desactive tant que jobs/worker.ts est vide
-  # (Phase 3). Le reactiver en retirant le profile, une fois BullMQ branche.
+  # The worker remains declared but disabled while jobs/worker.ts is empty
+  # (Phase 3). Enable it by removing the profile once BullMQ is connected.
   worker:
     build: ./server
     command: ["npm", "run", "worker"]
@@ -52,9 +52,10 @@ services:
       - POSTGRES_DB=dashboard
     volumes:
       - db_data:/var/lib/postgresql/data
-      # Joue le schema a la premiere creation du volume : sans cette ligne,
-      # les 6 tables ne sont JAMAIS creees.
-      - ./server/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # No initdb mount: the schema is now applied by the migration runner
+      # when the server starts (server/src/db/migrate.ts).
+      # This means schema changes no longer require `down -v`, which
+      # would delete all data.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
       interval: 5s
@@ -76,3 +77,4 @@ services:
 volumes:
   db_data:
   redis_data:
+  
