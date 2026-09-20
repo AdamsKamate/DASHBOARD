@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import aboutRouter from "./routes/about";
+import authRouter from "./routes/auth";
 import { runMigrations } from "./db/migrate";
 import { syncRegistryToDatabase } from "./db/repositories/services";
 import { ping, closePool } from "./db";
@@ -14,6 +15,7 @@ app.set("trust proxy", true);
 
 app.use(express.json());
 app.use(aboutRouter);
+app.use(authRouter);
 
 // Check that the database responds without opening psql.
 app.get("/health", async (_req, res) => {
