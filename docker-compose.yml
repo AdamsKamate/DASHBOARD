@@ -24,6 +24,10 @@ services:
       - "8081:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
+      # true: the front end talks to the in-browser mock (API.md reproduced
+      # route by route). Set to false in .env at the synchronisation card.
+      - NEXT_PUBLIC_USE_MOCK=${NEXT_PUBLIC_USE_MOCK:-true}
+      - NEXT_PUBLIC_MOCK_LATENCY=${NEXT_PUBLIC_MOCK_LATENCY:-300}
     depends_on:
       - server
     volumes:
