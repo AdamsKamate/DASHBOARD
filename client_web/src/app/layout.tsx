@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AuthProvider } from "../lib/auth/AuthProvider";
 
 export const metadata = {
   title: "Dashboard",
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        {/* Every page can read the session through useAuth(). */}
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
