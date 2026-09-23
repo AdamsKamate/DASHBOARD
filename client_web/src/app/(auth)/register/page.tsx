@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button, Card, Input } from "@/components/ui";
-import { ApiRequestError, register } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -16,10 +16,10 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      await register(email, password);
+      await api.auth.register({ email, password });
       setDone(true);
     } catch (e) {
-      setError(e instanceof ApiRequestError ? e.message : "Une erreur est survenue");
+      setError(e instanceof ApiError ? e.message : "Une erreur est survenue");
     } finally {
       setLoading(false);
     }
