@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, Input } from "@/components/ui";
-import { ApiRequestError, login } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,10 +17,10 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await api.auth.login({ email, password });
       router.push("/dashboard");
     } catch (e) {
-      setError(e instanceof ApiRequestError ? e.message : "Une erreur est survenue");
+      setError(e instanceof ApiError ? e.message : "Une erreur est survenue");
     } finally {
       setLoading(false);
     }
