@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
-import { ApiRequestError, verify } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 export default function VerifyPage() {
   const searchParams = useSearchParams();
@@ -17,11 +17,12 @@ export default function VerifyPage() {
       setError("Lien invalide : aucun token fourni");
       return;
     }
-    verify(token)
+    api.auth
+      .verify(token)
       .then(() => setStatus("ok"))
       .catch((e) => {
         setStatus("error");
-        setError(e instanceof ApiRequestError ? e.message : "Une erreur est survenue");
+        setError(e instanceof ApiError ? e.message : "Une erreur est survenue");
       });
   }, [token]);
 
