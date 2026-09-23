@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import aboutRouter from "./routes/about";
 import authRouter from "./routes/auth";
 import { runMigrations } from "./db/migrate";
@@ -12,8 +13,9 @@ const app = express();
 const PORT = 8080; // required by the assignment, do not make configurable
 
 // Required for req.ip to return the client's real IP behind Docker,
-// rather than the internal IP of the container network.
 app.set("trust proxy", true);
+const allowedOrigin = process.env.CLIENT_URL ?? "http://localhost:8081";
+app.use(cors({ origin: allowedOrigin, credentials: true }));
 
 app.use(express.json());
 // Parses the token cookie set by the login route into req.cookies.
