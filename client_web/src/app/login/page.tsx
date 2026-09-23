@@ -8,7 +8,6 @@ import { GuestOnly } from "../../lib/auth/guards";
 import { safeRedirectPath } from "../../lib/auth/redirect";
 
 // Minimal login page.
-// Written for card 1.9, because the guards need a page to redirect to.
 
 /* Maps an API error to a message the user can act on. */
 function loginErrorMessage(error: unknown): string {
@@ -34,6 +33,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -102,6 +102,8 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  // useSearchParams (in GuestOnly and LoginForm) requires a Suspense
+  // boundary in the Next.js App Router.
   return (
     <Suspense fallback={null}>
       <GuestOnly>

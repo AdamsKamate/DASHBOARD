@@ -13,9 +13,8 @@ import type {
   WidgetType,
 } from "./types";
 
-// API client.
-// The only module allowed to talk to the backend. Pages call `api.auth.login`
-// or `api.widgets.list`, never `fetch` directly.
+// API client
+// The only module allowed to talk to the backend.
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
@@ -53,7 +52,9 @@ async function mockRequest<T>(method: Method, path: string, body?: unknown): Pro
     const err = res.body as { error: string; details?: string[] };
     throw new ApiError(res.status, err.error, err.details);
   }
-  if (res.redirect) return { redirect: res.redirect } as T;
+  if (res.redirect) {
+    return { redirect: res.redirect } as T;
+  }
   return (res.body === undefined ? undefined : JSON.parse(JSON.stringify(res.body))) as T;
 }
 
@@ -76,8 +77,46 @@ async function realRequest<T>(method: Method, path: string, body?: unknown): Pro
   return data as T;
 }
 
-function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
-  return USE_MOCK ? mockRequest<T>(method, path, body) : realRequest<T>(method, path, body);
+// Session expiry
+
+type UnauthorizedListener = () => void;
+
+let unauthorizedListener: UnauthorizedListener | null = null;
+
+export function setUnauthorizedListener(listener: UnauthorizedListener | null): void {
+  unauthorizedListener = listener;
+}
+
+/*
+ Routes where a 401 is an expected answer, not an expired session:
+ */
+const ROUTES_WHERE_401_IS_EXPECTED = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify",
+  "/auth/logout",
+  "/auth/me",
+];
+
+function isExpected401(path: string): boolean {
+  const pathWithoutQuery = path.split("?")[0];
+  return ROUTES_WHERE_401_IS_EXPECTED.includes(pathWithoutQuery);
+}
+
+async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  try {
+    return USE_MOCK
+      ? await mockRequest<T>(method, path, body)
+      : await realRequest<T>(method, path, body);
+  } catch (error) {
+    const sessionEnded =
+      error instanceof ApiError && error.status === 401 && !isExpected401(path);
+
+    if (sessionEnded && unauthorizedListener) {
+      unauthorizedListener();
+    }
+    throw error;
+  }
 }
 
 // Typed endpoints, one per route of API.md
