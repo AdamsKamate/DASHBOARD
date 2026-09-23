@@ -1,45 +1,26 @@
-"use client";
+import Link from "next/link";
+import { Button, Card } from "@/components/ui";
 
-import { useRouter } from "next/navigation";
-import { useAuth } from "../lib/auth/AuthProvider";
-import { RequireAuth } from "../lib/auth/guards";
-
-// The dashboard is the main page of the application: logged-in users only.
-// The widget grid arrives with card 1.10.
-
-function DashboardContent() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
-
-  async function handleLogout() {
-    await logout();
-    router.replace("/login");
-  }
-
+// Public homepage: no auth guard here, just an entry point toward
+// login or register. The actual app lives behind /dashboard.
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-50 p-8">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-600">{user?.email}</span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
-          >
-            Log out
-          </button>
+    <main className="min-h-screen bg-ink flex items-center justify-center px-4">
+      <Card title="Dashboard">
+        <div className="flex flex-col gap-4 w-80">
+          <p className="text-slate-400 text-sm">
+            Ton mur de widgets personnalisé : météo, GitHub, Gmail et plus.
+          </p>
+          <Link href="/login">
+            <Button className="w-full">Se connecter</Button>
+          </Link>
+          <Link href="/register">
+            <Button variant="secondary" className="w-full">
+              Créer un compte
+            </Button>
+          </Link>
         </div>
-      </header>
-      <p className="mt-6 text-slate-500">The widget grid arrives with card 1.10.</p>
+      </Card>
     </main>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <RequireAuth>
-      <DashboardContent />
-    </RequireAuth>
   );
 }
