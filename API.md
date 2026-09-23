@@ -1,36 +1,78 @@
-# API Contract : Dashboard
+# API Contract: Dashboard
 
-This document is the **source of truth** between the backend and frontend.
+This document is the **source of truth** between the backend and the frontend.
 Every route used by the frontend must be defined here **before** it is coded.
 
-Base URL : `http://localhost:8080`
+The frontend mock (`client_web/src/lib/mock/handlers.ts`) reproduces this
+document route by route. When a route changes here, the server and the mock
+change in the same commit.
 
-Authentication: JWT transmitted in an `httpOnly` cookie named `token`, or in the
-`Authorization: Bearer <token>`.
-
-Common error codes:
-
-| Code | Meaning |
-|---|---|
-| 400 | Invalid request (missing or incorrectly typed field) |
-| 401 | Not authenticated (missing or invalid token) |
-| 403 | Authenticated but not authorized (e.g. unconfirmed account) |
-| 404 | Resource not found |
-| 409 | Conflict (e.g. email already in use) |
-
-Uniform error format:
-
-```json
-{ "error": "message lisible" }
-```
+Base URL: `http://localhost:8080`
 
 ---
 
-## 1. Required Subject Endpoint
+## Conventions
+
+### Authentication
+
+A JWT, sent either:
+
+- in an `httpOnly` cookie named `token`, set by `POST /auth/login` (browsers);
+- or in the header `Authorization: Bearer <token>` (curl, Postman).
+
+Routes marked **Authenticated** answer `401` without a valid token.
+Routes marked **Admin** additionally answer `403` when the role is not `admin`.
+
+### Status codes
+
+| Code | Meaning |
+|---|---|
+| `200` | Success with a body |
+| `201` | Resource created |
+| `204` | Success without a body |
+| `302` | Redirect (OAuth routes only) |
+| `400` | Invalid request (missing or incorrectly typed field) |
+| `401` | Not authenticated (missing, invalid, or expired token) |
+| `403` | Authenticated but not allowed (unconfirmed account, missing role, unsubscribed service) |
+| `404` | Resource not found, or not owned by the current user |
+| `409` | Conflict (email already in use) |
+| `500` | Unexpected server error |
+
+### Error format
+
+Every failing route returns the same shape:
+
+```json
+{ "error": "human readable message" }
+```
+
+Validation errors (`400`) add the list of problems:
+
+```json
+{
+  "error": "Invalid input",
+  "details": ["email format is invalid", "password must be at least 8 characters"]
+}
+```
+
+The frontend must branch on the **status code**, never on the message text.
+
+### Authenticated routes: common errors
+
+Not repeated below for each route:
+
+| Code | Body |
+|---|---|
+| `401` | `{ "error": "Authentication required" }` when no token is sent |
+| `401` | `{ "error": "Invalid or expired token" }` when the token is forged or expired |
+
+---
+
+## 1. Endpoint Required by the Assignment
 
 ### `GET /about.json`
 
-Public, without authentication. Format strictly required by the subject.
+Public, no authentication. Format strictly imposed by the assignment.
 
 **`200` response**
 
@@ -59,7 +101,9 @@ Public, without authentication. Format strictly required by the subject.
 }
 ```
 
-`params[].type` can only be `"string"` or `"integer"`.
+- `client.host`: IPv4 of the client, without the `::ffff:` prefix
+- `server.current_time`: Unix timestamp in **seconds**
+- `params[].type`: only `"string"` or `"integer"`
 
 ---
 
@@ -67,11 +111,16 @@ Public, without authentication. Format strictly required by the subject.
 
 ### `POST /auth/register`
 
+Public. Creates an unconfirmed account and sends the confirmation email.
+
 **Request**
 
 ```json
-{ "email": "user@example.com", "password": "motdepasse" }
+{ "email": "user@example.com", "password": "password123" }
 ```
+
+- `email` is normalized to lowercase before storage
+- `password`: 8 characters minimum, 72 bytes maximum (bcrypt limit)
 
 **`201` response**
 
@@ -79,13 +128,19 @@ Public, without authentication. Format strictly required by the subject.
 { "message": "Account created, email confirmation required" }
 ```
 
-**Errors**: `400` missing fields · `409` email already in use
+**Errors**
+
+| Code | Body |
+|---|---|
+| `400` | `{ "error": "Invalid input", "details": [...] }` |
+| `409` | `{ "error": "Email already in use" }`, case-insensitive |
 
 ---
 
 ### `GET /auth/verify?token=<verification_token>`
 
-Confirms the account through the link received by email.
+Public. Confirms the account through the link received by email. The link
+works **only once**.
 
 **`200` response**
 
@@ -93,16 +148,23 @@ Confirms the account through the link received by email.
 { "message": "Account confirmed" }
 ```
 
-**Errors**: `400` invalid or expired token
+**Errors**
+
+| Code | Body |
+|---|---|
+| `400` | `{ "error": "Invalid or expired token" }` for an unknown, already used, or missing token |
 
 ---
 
 ### `POST /auth/login`
 
-**Requête**
+Public. Checks the credentials, then that the account is confirmed (C3), then
+sets the `token` cookie.
+
+**Request**
 
 ```json
-{ "email": "user@example.com", "password": "motdepasse" }
+{ "email": "user@example.com", "password": "password123" }
 ```
 
 **`200` response**
@@ -114,15 +176,23 @@ Confirms the account through the link received by email.
 }
 ```
 
-**Errors**: `401` invalid credentials · `403` unconfirmed account
+The response also sets the `token` cookie (`httpOnly`, `SameSite=Lax`, 7 days).
+
+**Errors**
+
+| Code | Body |
+|---|---|
+| `400` | `{ "error": "Email and password are required" }` |
+| `401` | `{ "error": "Invalid credentials" }`, same message for an unknown email and a wrong password |
+| `403` | `{ "error": "Account not confirmed" }` |
 
 ---
 
 ### `GET /auth/me`
 
-Authenticated. Returns the current user.
+**Authenticated.** Returns the current user.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 { "id": "uuid", "email": "user@example.com", "role": "user" }
@@ -132,73 +202,82 @@ Authenticated. Returns the current user.
 
 ### `POST /auth/logout`
 
-Authenticated. Invalidates the cookie.
+Public. Clears the `token` cookie. Answers `204` even when no cookie is sent.
+
+The JWT itself stays valid until it expires: a JWT cannot be revoked.
 
 **`204` response**: no body.
 
 ---
 
-## 3. Services et OAuth
+## 3. Services and OAuth
 
 ### `GET /services`
 
-Authentifié. Liste les services disponibles et l'état de souscription de l'utilisateur courant.
+**Authenticated.** Lists the available services and the subscription state of
+the current user.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 [
   { "name": "weather", "requiresAuth": false, "subscribed": true },
+  { "name": "rss",     "requiresAuth": false, "subscribed": true },
   { "name": "github",  "requiresAuth": true,  "subscribed": false },
   { "name": "google",  "requiresAuth": true,  "subscribed": true }
 ]
 ```
 
-`subscribed` vaut toujours `true` pour un service avec `requiresAuth: false`
-(disponible par défaut à tout utilisateur authentifié, conformément au sujet).
+`subscribed` is always `true` for a service with `requiresAuth: false`:
+such services are available by default to every authenticated user, as
+required by the assignment.
 
 ---
 
 ### `GET /oauth/:service/authorize`
 
-Authentifié. Redirige (`302`) vers la page d'autorisation du provider.
-Le front ne consomme pas de JSON ici : il fait une navigation complète.
+**Authenticated.** Redirects (`302`) to the provider's authorization page.
+
+The frontend does not consume JSON here: it performs a full page navigation
+(`api.services.link(service)` on the client side).
 
 ---
 
 ### `GET /oauth/:service/callback?code=...&state=...`
 
-Appelé par le provider. Le serveur échange le code contre un token, le chiffre, le stocke, puis redirige (`302`) vers :
+Called by the provider, never by the frontend. The server checks the `state`,
+exchanges the code for a token, encrypts it, stores it, then redirects
+(`302`) to:
 
 ```
 {CLIENT_URL}/services?linked={service}
 ```
 
-En cas d'échec :
+On failure:
 
 ```
-{CLIENT_URL}/services?error={raison}
+{CLIENT_URL}/services?error={reason}
 ```
 
 ---
 
 ### `DELETE /services/:service/subscription`
 
-Authentifié. Délie le compte tiers et supprime les tokens stockés.
+**Authenticated.** Unlinks the third-party account and deletes the stored
+tokens.
 
-**Réponse `204`** : pas de corps.
+**`204` response**: no body.
 
 ---
 
-## 4. Types de widgets
+## 4. Widget Types
 
 ### `GET /widget-types`
 
-Authentifié.
-Liste tous les types de widgets disponibles, avec leurs paramètres.
-C'est cette route qui alimente le formulaire de configuration généré dynamiquement côté front.
+**Authenticated.** Lists every widget type with its parameters. This route
+feeds the configuration form generated dynamically on the frontend.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 [
@@ -206,7 +285,7 @@ C'est cette route qui alimente le formulaire de configuration généré dynamiqu
     "id": "city_temperature",
     "service": "weather",
     "name": "city_temperature",
-    "description": "Affiche la température actuelle d'une ville",
+    "description": "Display the current temperature for a city",
     "requiresAuth": false,
     "params": [
       { "name": "city", "type": "string" }
@@ -216,25 +295,32 @@ C'est cette route qui alimente le formulaire de configuration généré dynamiqu
     "id": "github_commits",
     "service": "github",
     "name": "github_commits",
-    "description": "Derniers commits d'un dépôt",
+    "description": "List the latest commits of a repository",
     "requiresAuth": true,
     "params": [
-      { "name": "repo",   "type": "string"  },
-      { "name": "number", "type": "integer" }
+      { "name": "repo",  "type": "string"  },
+      { "name": "count", "type": "integer" }
     ]
   }
 ]
 ```
 
+The complete list of the 8 widgets and their parameters is in
+`docs/Services/Services.md`.
+
 ---
 
-## 5. Instances de widgets
+## 5. Widget Instances
+
+A widget instance belongs to one user. An instance owned by someone else
+behaves as if it did not exist: `404`, never `403`, so that its existence is
+not revealed.
 
 ### `GET /widgets`
 
-Authentifié. Toutes les instances du dashboard de l'utilisateur courant.
+**Authenticated.** Every instance on the current user's dashboard.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 [
@@ -252,9 +338,10 @@ Authentifié. Toutes les instances du dashboard de l'utilisateur courant.
 
 ### `POST /widgets`
 
-Authentifié. Crée une instance configurée et enregistre son job de rafraîchissement.
+**Authenticated.** Creates a configured instance and schedules its refresh
+job.
 
-**Requête**
+**Request**
 
 ```json
 {
@@ -265,21 +352,29 @@ Authentifié. Crée une instance configurée et enregistre son job de rafraîchi
 }
 ```
 
-`refreshRate` est en secondes, minimum `30` (protection contre les rate-limits des APIs tierces). `position` est optionnel, valeurs par défaut `x:0, y:0, w:2, h:2`.
+- `params`: every parameter declared by the widget type is required, with
+  the declared type
+- `refreshRate`: seconds, integer, minimum `30` (protects third-party rate
+  limits)
+- `position`: optional, defaults to `{ "x": 0, "y": 0, "w": 2, "h": 2 }`
 
-**Réponse `201`** : l'instance créée, même format que `GET /widgets`.
+**`201` response**: the created instance, same shape as `GET /widgets`.
 
-**Erreurs** : `400` params invalides au regard du schéma du widget ·
-`403` service non souscrit
+**Errors**
+
+| Code | Body |
+|---|---|
+| `400` | `{ "error": "Invalid input", "details": [...] }` for an unknown type, a missing or mistyped param, or a `refreshRate` below 30 |
+| `403` | `{ "error": "Service not subscribed" }` |
 
 ---
 
 ### `PATCH /widgets/:id`
 
-Authentifié. Reconfigure, déplace ou redimensionne une instance.
-Tous les champs sont optionnels, seuls ceux fournis sont modifiés.
+**Authenticated.** Reconfigures, moves, or resizes an instance. Every field is
+optional: only the fields provided are validated and changed.
 
-**Requête**
+**Request**
 
 ```json
 {
@@ -289,25 +384,41 @@ Tous les champs sont optionnels, seuls ceux fournis sont modifiés.
 }
 ```
 
-**Réponse `200`** : l'instance mise à jour.
+Changing `params` resets the cached data: the next `GET /widgets/:id/data`
+answers `pending`.
+
+**`200` response**: the updated instance.
+
+**Errors**
+
+| Code | Body |
+|---|---|
+| `400` | `{ "error": "Invalid input", "details": [...] }` |
+| `404` | `{ "error": "Widget not found" }` |
 
 ---
 
 ### `DELETE /widgets/:id`
 
-Authentifié. Supprime l'instance et son job de rafraîchissement.
+**Authenticated.** Deletes the instance and its refresh job.
 
-**Réponse `204`** : pas de corps.
+**`204` response**: no body.
+
+**Errors**
+
+| Code | Body |
+|---|---|
+| `404` | `{ "error": "Widget not found" }` |
 
 ---
 
 ### `GET /widgets/:id/data`
 
-Authentifié. Renvoie les **données en cache** de l'instance. Cette route ne
-déclenche jamais d'appel vers une API externe : c'est le worker (Timer) qui
-alimente le cache en arrière-plan.
+**Authenticated.** Returns the **cached data** of the instance. This route
+never calls an external API: the worker (Timer) feeds the cache in the
+background.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 {
@@ -317,15 +428,15 @@ alimente le cache en arrière-plan.
 }
 ```
 
-`status` vaut :
+`status` is one of:
 
-| Valeur | Signification |
+| Value | Meaning |
 |---|---|
-| `ok` | Données à jour |
-| `pending` | Aucun rafraîchissement encore effectué (`data` vaut `null`) |
-| `error` | Le dernier rafraîchissement a échoué (`error` contient le motif) |
+| `ok` | Data is up to date |
+| `pending` | No refresh has run yet; `data` and `fetchedAt` are `null` |
+| `error` | The last refresh failed; `error` holds the reason |
 
-Exemple en erreur :
+Error example:
 
 ```json
 {
@@ -336,8 +447,16 @@ Exemple en erreur :
 }
 ```
 
-Le front doit gérer les trois cas : un widget en erreur ne doit jamais casser
-l'affichage des autres.
+A failing widget answers `200` with `status: "error"`, not a `4xx`/`5xx`: the
+request itself succeeded, only the underlying data is unavailable. The
+frontend must handle the three states, and a widget in error must never break
+the display of the others.
+
+**Errors**
+
+| Code | Body |
+|---|---|
+| `404` | `{ "error": "Widget not found" }` |
 
 ---
 
@@ -345,9 +464,9 @@ l'affichage des autres.
 
 ### `GET /admin/users`
 
-Authentifié, réservé au rôle `admin`.
+**Admin.** Lists every account. Never exposes passwords or tokens.
 
-**Réponse `200`**
+**`200` response**
 
 ```json
 [
@@ -361,18 +480,80 @@ Authentifié, réservé au rôle `admin`.
 ]
 ```
 
-**Erreurs** : `403` si le rôle n'est pas `admin`
+**Errors**
+
+| Code | Body |
+|---|---|
+| `403` | `{ "error": "Insufficient permissions" }` |
 
 ---
 
 ### `DELETE /admin/users/:id`
 
-Authentifié, réservé au rôle `admin`. Supprime un compte et toutes ses données.
+**Admin.** Deletes an account together with its widgets and subscriptions.
 
-**Réponse `204`** : pas de corps.
+**`204` response**: no body.
+
+**Errors**
+
+| Code | Body |
+|---|---|
+| `403` | `{ "error": "Insufficient permissions" }` |
+| `404` | `{ "error": "User not found" }` |
 
 ---
 
-## Règle de modification de ce document
+## Implementation Status
 
-Toute modification d'une route déjà listée ici doit être **annoncée à l'autre avant d'être codée**. C'est la seule dépendance forte entre le travail backend et le travail frontend : tant que ce contrat est respecté, chacun avance sans jamais attendre l'autre.
+| Route | Server | Mock |
+|---|---|---|
+| `GET /about.json` | Done (services still hard-coded) | Done |
+| `POST /auth/register` | Done | Done |
+| `GET /auth/verify` | Done | Done |
+| `POST /auth/login` | Done | Done |
+| `GET /auth/me` | Done | Done |
+| `POST /auth/logout` | Done | Done |
+| `GET /services` | Phase 2 | Done |
+| `GET /oauth/:service/authorize` | Phase 2 | Done (simulated) |
+| `GET /oauth/:service/callback` | Phase 2 | Not applicable |
+| `DELETE /services/:service/subscription` | Phase 2 | Done |
+| `GET /widget-types` | Phase 2 | Done |
+| `GET /widgets` | Phase 2 | Done |
+| `POST /widgets` | Phase 2 | Done |
+| `PATCH /widgets/:id` | Phase 2 | Done |
+| `DELETE /widgets/:id` | Phase 2 | Done |
+| `GET /widgets/:id/data` | Phase 3 | Done |
+| `GET /admin/users` | Phase 3 | Done |
+| `DELETE /admin/users/:id` | Phase 3 | Done |
+
+---
+
+## Change Log
+
+### Phase 1, card 1.6 (mock)
+
+Discrepancies found while building the mock, fixed so that the contract
+matches the server:
+
+| Change | Reason |
+|---|---|
+| `github_commits` parameter renamed from `number` to `count` | The server (`about.ts`) and `docs/Services/Services.md` already used `count` |
+| `details` field added to the error format | The server returns it on validation errors |
+| `POST /auth/logout` marked **public** instead of authenticated | The server clears the cookie without requiring a token |
+| `400` added to `POST /auth/login` | Returned by the server when a field is missing |
+| `404` added to `PATCH`, `DELETE`, and `GET .../data` on widgets | An unknown or foreign widget must be reported |
+| Exact `403` message for an unsubscribed service | `Service not subscribed` |
+| `rss` added to the `GET /services` example | Four services are planned, not three |
+| Document fully translated to English | It mixed French and English |
+
+---
+
+## Rule for Changing This Document
+
+Any change to a route already listed here must be **announced to the other
+team member before being coded**. This is the only hard dependency between
+backend and frontend work: as long as this contract is respected, each person
+moves forward without waiting for the other.
+
+A change to this document is made **in the same commit** as the matching
+change in `server/` and in `client_web/src/lib/mock/`.
