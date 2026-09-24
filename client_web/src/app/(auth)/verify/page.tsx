@@ -1,43 +1,86 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Button, Card } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { Button, Card, FormError, FormSuccess } from "@/components/ui";
+import { api } from "@/lib/api";
+import { verifyErrorMessage, DisplayableError } from "@/lib/auth/messages";
 
-export default function VerifyPage() {
+type VerificationState = "checking" | "confirmed" | "failed";
+
+function VerificationResult() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const [status, setStatus] = useState<"pending" | "ok" | "error">("pending");
-  const [error, setError] = useState<string | null>(null);
+
+  const [state, setState] = useState<VerificationState>("checking");
+  const [failure, setFailure] = useState<DisplayableError | null>(null);
 
   useEffect(() => {
     if (!token) {
-      setStatus("error");
-      setError("Lien invalide : aucun token fourni");
+      setState("failed");
+      setFailure({ message: "Lien invalide : aucun token n'a été fourni." });
       return;
     }
+
+    let isStillMounted = true;
+
     api.auth
       .verify(token)
-      .then(() => setStatus("ok"))
-      .catch((e) => {
-        setStatus("error");
-        setError(e instanceof ApiError ? e.message : "Une erreur est survenue");
+      .then(() => {
+        if (isStillMounted) setState("confirmed");
+      })
+      .catch((error) => {
+        if (!isStillMounted) return;
+        setState("failed");
+        setFailure(verifyErrorMessage(error));
       });
+
+    // React runs effects twice in development. Without this flag, the second
+    // run would call /auth/verify with an already-consumed token and display
+    // an error on a confirmation that actually worked.
+    return () => {
+      isStillMounted = false;
+    };
   }, [token]);
 
   return (
     <Card title="Confirmation du compte">
-      {status === "pending" && <p className="text-slate-400 text-sm">Vérification en cours...</p>}
-      {status === "ok" && (
-        <div className="flex flex-col gap-4">
-          <p className="text-pulse text-sm">Compte confirmé.</p>
-          <Link href="/login">
-            <Button>Se connecter</Button>
-          </Link>
-        </div>
-      )}
-      {status === "error" && <p className="text-flare text-sm">{error}</p>}
+      <div className="flex flex-col gap-4 w-80">
+        {state === "checking" && (
+          <p role="status" className="text-slate-400 text-sm">
+            Vérification en cours...
+          </p>
+        )}
+
+        {state === "confirmed" && (
+          <>
+            <FormSuccess>Ton compte est confirmé.</FormSuccess>
+            <Link href="/login">
+              <Button className="w-full">Se connecter</Button>
+            </Link>
+          </>
+        )}
+
+        {state === "failed" && failure && (
+          <>
+            <FormError message={failure.message} details={failure.details} />
+            <Link href="/register">
+              <Button variant="secondary" className="w-full">
+                Créer un compte
+              </Button>
+            </Link>
+          </>
+        )}
+      </div>
     </Card>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerificationResult />
+    </Suspense>
   );
 }
