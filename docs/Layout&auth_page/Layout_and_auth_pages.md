@@ -442,3 +442,201 @@ Expected: **Mode: mock** and **23 / 23 passed**.
 
 The dashboard currently displays a placeholder card; the grid arrives with
 card 1.10.
+
+---
+
+## 13. Running the project
+
+### Start the project
+
+From the repository root, start the project with one command:
+
+```bash
+cd ~/TECH3/G-WEB-500-PAR-5-1-dashboard-30
+docker-compose up -d
+```
+
+Check that the containers are running:
+
+```bash
+docker-compose ps
+```
+
+The following services should be `Up`: `server`, `client_web`, `db`, `redis`,
+and `mailhog`. The `worker` remains stopped, which is expected until Phase 3.
+
+### The three important URLs
+
+| URL | Purpose |
+|---|---|
+| [http://localhost:8081](http://localhost:8081) | The application: this is where you see your work |
+| [http://localhost:8025](http://localhost:8025) | MailHog: confirmation emails sent by the server |
+| [http://localhost:8080/about.json](http://localhost:8080/about.json) | The API: JSON only, with no user interface |
+
+Port `8080` has **no visual interface**: it is the API. Everything you view is
+available on port `8081`.
+
+### See what you built
+
+Open `http://localhost:8081` with **Ctrl+Shift+R**.
+
+#### Home page
+
+You should see a dark blue background, a centered card, and two buttons:
+“Se connecter” and “Créer un compte”. If everything is white and unstyled,
+the Tailwind palette is not being applied.
+
+#### Complete flow
+
+**1. Check route protection**
+
+Open `http://localhost:8081/dashboard` directly.
+
+You should be redirected to `/login?next=%2Fdashboard`.
+
+**2. Check validation errors**
+
+Go to `/register` and enter `a@b` and `123`.
+
+You should see a red message listing the problems.
+
+**3. Register**
+
+Enter `moi@test.dev` and `password123`.
+
+You should see: “Un email de confirmation vient d'être envoyé à
+[moi@test.dev](mailto:moi@test.dev)”.
+
+**4. Retrieve the verification link**
+
+Open the browser console with **F12**, then select the **Console** tab.
+
+You should see:
+
+```text
+[mock] verification link for moi@test.dev: /auth/verify?token=verify-a1b2c3d4
+```
+
+Copy the `verify-a1b2c3d4` part.
+
+**5. Check the unconfirmed-account block (C3)**
+
+Go to `/login` and sign in with `moi@test.dev`.
+
+You should see: “Confirme ton compte avec le lien reçu par email avant de te
+connecter.”
+
+**6. Verify the account**
+
+In the address bar, open:
+
+```text
+http://localhost:8081/verify?token=verify-a1b2c3d4
+```
+
+You should see: “Ton compte est confirmé.”
+
+The front-end route is `/verify`, not `/auth/verify`; the latter belongs to the
+API.
+
+**7. Sign in**
+
+Sign in again with `moi@test.dev`.
+
+You should arrive at `/dashboard`, with your email displayed in the top-right
+corner.
+
+**8. Check session persistence**
+
+Reload the page with F5.
+
+You should still be signed in.
+
+**9. Check the guest guard**
+
+Open `http://localhost:8081/login` while signed in.
+
+You should be redirected to `/dashboard`.
+
+**10. Sign out**
+
+Click “Se déconnecter”, then open `/dashboard` again.
+
+You should be redirected to `/login`.
+
+### Faster testing
+
+Three accounts already exist. The password is `password123` for all three:
+
+| Email | Case |
+|---|---|
+| `demo@dashboard.dev` | Normal login |
+| `pending@dashboard.dev` | Unconfirmed account |
+| `admin@dashboard.dev` | Administrator |
+
+### The verification page
+
+`http://localhost:8081/dev` automatically tests the contract's 23 routes.
+
+Expected: **Mode: mock** and **23 / 23 passed**.
+
+### Mock mode and its implications
+
+For now, `NEXT_PUBLIC_USE_MOCK=true`: the front end uses simulated data
+**inside the browser**, without contacting the server. This is intentional:
+card 1.6 exists so that the front-end team can work without waiting for the
+back end.
+
+To verify this:
+
+```bash
+docker-compose stop server
+```
+
+Reload `http://localhost:8081`: everything should still work. Then restart the
+server:
+
+```bash
+docker-compose start server
+```
+
+Connecting the front end to the real server is **card 1.11**, the
+synchronization point.
+
+### Check the back end
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/about.json
+
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"back@test.dev","password":"password123"}'
+```
+
+Then open [http://localhost:8025](http://localhost:8025). The confirmation
+email should be there, with its action button.
+
+You can also inspect the database:
+
+```bash
+docker-compose exec db psql -U dashboard -d dashboard \
+  -c 'SELECT email, is_verified FROM users'
+```
+
+### When something does not work
+
+The first diagnostic step is always to inspect the service logs:
+
+```bash
+docker-compose logs --tail=30 client_web
+docker-compose logs --tail=30 server
+```
+
+To check that the client compiles:
+
+```bash
+docker-compose exec client_web npx tsc --noEmit -p tsconfig.json
+```
+
+No output means that the type check passed.
