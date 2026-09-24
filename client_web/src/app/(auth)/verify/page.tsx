@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, FormError, FormSuccess } from "@/components/ui";
-import { api } from "@/lib/api";
+import { verifyAccountOnce } from "@/lib/auth/verifyOnce";
 import { verifyErrorMessage, DisplayableError } from "@/lib/auth/messages";
 
 type VerificationState = "checking" | "confirmed" | "failed";
@@ -25,8 +25,11 @@ function VerificationResult() {
 
     let isStillMounted = true;
 
-    api.auth
-      .verify(token)
+    // verifyAccountOnce, not api.auth.verify: React StrictMode runs this
+    // effect twice in development, and the confirmation link is single-use.
+    // A second request would answer 400 and show an error on a confirmation
+    // that actually worked.
+    verifyAccountOnce(token)
       .then(() => {
         if (isStillMounted) setState("confirmed");
       })
@@ -36,9 +39,6 @@ function VerificationResult() {
         setFailure(verifyErrorMessage(error));
       });
 
-    // React runs effects twice in development. Without this flag, the second
-    // run would call /auth/verify with an already-consumed token and display
-    // an error on a confirmation that actually worked.
     return () => {
       isStillMounted = false;
     };
