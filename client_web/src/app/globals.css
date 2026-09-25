@@ -13,3 +13,13 @@ body {
 :focus-visible {
   @apply outline-none ring-2 ring-signal ring-offset-2 ring-offset-ink;
 }
+
+/* Widget grid */
+.widget-grid .react-grid-item.react-grid-placeholder {
+  @apply bg-signal rounded-md;
+  opacity: 0.15;
+}
+
+.widget-grid .react-grid-item > .react-resizable-handle::after {
+  border-color: theme("colors.slate.500");
+}
