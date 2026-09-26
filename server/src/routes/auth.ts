@@ -26,8 +26,7 @@ const PG_UNIQUE_VIOLATION = "23505";
 
 /*
  Bcrypt hash of a value nobody knows, used to keep the login timing constant
- when the email does not exist. Comparing against it costs the same as a real
- comparison, so response time does not reveal whether an account exists.
+ when the email does not exist.
  */
 const DUMMY_HASH =
   "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
@@ -50,7 +49,7 @@ function generateVerificationToken(): string {
 router.post("/auth/register", async (req: Request, res: Response) => {
   const { email, password } = req.body ?? {};
 
-  // --- Validation ---
+  // Validation
   const emailCheck = validateEmail(email);
   const passwordCheck = validatePassword(password);
 
@@ -64,7 +63,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   const normalizedEmail = normalizeEmail(email);
 
   try {
-    // --- Hashing ---
+    // Hashing
     // The plaintext password never leaves this function: only the hash
     // is passed to the repository and then stored in the database.
     const passwordHash = await hashPassword(password);
@@ -76,10 +75,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       verificationToken,
     });
 
-    // --- Confirmation email ---
-    // Delivery failure does not cancel the registration: the account already
-    // exists in the database. The user can request a new email later rather
-    // than losing their account because the SMTP server was unreachable.
+    // Confirmation email
     const sent = await sendVerificationEmail(user.email, verificationToken);
 
     if (!sent) {
@@ -90,10 +86,12 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       } else {
         // No SMTP server configured: fall back to the logs so the flow stays
         // testable. This path must never be reachable in production.
-        const serverUrl = process.env.SERVER_URL ?? "http://localhost:8080";
+        // Same link as the email: it points at the front end, which owns the
+        // confirmation screen.
+        const clientUrl = process.env.CLIENT_URL ?? "http://localhost:8081";
         console.warn(
           `[auth] SMTP not configured, verification link for ${user.email}: ` +
-            `${serverUrl}/auth/verify?token=${verificationToken}`
+            `${clientUrl}/verify?token=${verificationToken}`
         );
       }
     }
@@ -119,7 +117,6 @@ router.post("/auth/register", async (req: Request, res: Response) => {
 /*
  GET /auth/verify?token=<verification_token>
  Confirms an account from the link received by email.
-
  Responses: 200 confirmed, 400 invalid or already used token.
  */
 router.get("/auth/verify", async (req: Request, res: Response) => {
@@ -195,7 +192,6 @@ router.post("/auth/login", async (req: Request, res: Response) => {
     if (!user.is_verified) {
       return res.status(403).json({ error: "Account not confirmed" });
     }
-
     const token = signToken({
       userId: user.id,
       email: user.email,
@@ -246,13 +242,8 @@ router.get("/auth/me", requireAuth, async (req: Request, res: Response) => {
 /*
  POST /auth/logout
  Clears the cookie.
- The token itself stays valid until it expires: a JWT cannot be revoked. This
- only ends the browser session, which is why the lifetime is kept short.
  */
 router.post("/auth/logout", (_req: Request, res: Response) => {
-  // maxAge is deliberately omitted here: clearCookie sets the expiry itself,
-  // and passing it is deprecated in Express 5. The other options must match
-  // those used when setting the cookie, otherwise the browser keeps it.
   const { maxAge, ...clearOptions } = COOKIE_OPTIONS;
   res.clearCookie("token", clearOptions);
   return res.status(204).send();

@@ -2,7 +2,6 @@ import nodemailer, { Transporter } from "nodemailer";
 
 // Email delivery.
 
-
 let transporter: Transporter | null = null;
 
 /*
@@ -44,15 +43,11 @@ export interface MailOptions {
 
 /*
  Sends an email.
- Returns false on failure instead of throwing an exception: an unavailable
- SMTP server must not cancel a registration that has already been stored in
- the database.
  */
 export async function sendMail(options: MailOptions): Promise<boolean> {
   if (!isMailerConfigured()) {
     return false;
   }
-
   try {
     await getTransporter().sendMail({
       from: process.env.SMTP_FROM ?? "no-reply@dashboard.local",
@@ -76,8 +71,9 @@ export async function sendVerificationEmail(
   email: string,
   token: string
 ): Promise<boolean> {
-  const serverUrl = process.env.SERVER_URL ?? "http://localhost:8080";
-  const link = `${serverUrl}/auth/verify?token=${token}`;
+  // The link points at the FRONT END, not at the API
+  const clientUrl = process.env.CLIENT_URL ?? "http://localhost:8081";
+  const link = `${clientUrl}/verify?token=${token}`;
 
   return sendMail({
     to: email,
