@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, FormError } from "@/components/ui";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { AddWidgetPanel } from "@/components/dashboard/AddWidgetPanel";
-import { api } from "@/lib/api";
+import { api, ApiError, USE_MOCK } from "@/lib/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { RequireAuth } from "@/lib/auth/guards";
 import {
@@ -20,16 +20,20 @@ import type { Service, WidgetInstance, WidgetType } from "@/lib/types";
 
 type LoadingState = "loading" | "ready" | "failed";
 
+function isNotImplementedYet(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 function DashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
-
   const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
   const [widgetTypes, setWidgetTypes] = useState<WidgetType[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>("loading");
   const [actionError, setActionError] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
+  const [widgetsAvailable, setWidgetsAvailable] = useState(true);
 
   const loadDashboard = useCallback(async () => {
     setLoadingState("loading");
@@ -44,8 +48,14 @@ function DashboardContent() {
       setWidgets(loadedWidgets);
       setWidgetTypes(loadedWidgetTypes);
       setServices(loadedServices);
+      setWidgetsAvailable(true);
       setLoadingState("ready");
-    } catch {
+    } catch (error) {
+      if (isNotImplementedYet(error)) {
+        setWidgetsAvailable(false);
+        setLoadingState("ready");
+        return;
+      }
       setLoadingState("failed");
     }
   }, []);
@@ -103,7 +113,21 @@ function DashboardContent() {
   return (
     <main className="min-h-screen bg-ink">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
-        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+          {/* Which backend the front end is talking to. Development aid:
+              remove it, or hide it behind NODE_ENV, before the final build. */}
+          <span
+            className="text-xs px-2 py-0.5 rounded border border-line text-slate-400"
+            title={
+              USE_MOCK
+                ? "Données simulées dans le navigateur"
+                : "Requêtes envoyées au serveur réel"
+            }
+          >
+            {USE_MOCK ? "mock" : "serveur réel"}
+          </span>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-400">{user?.email}</span>
           <Button variant="secondary" onClick={handleLogout}>
@@ -128,7 +152,17 @@ function DashboardContent() {
           </Card>
         )}
 
-        {loadingState === "ready" && (
+        {loadingState === "ready" && !widgetsAvailable && (
+          <Card title="Widgets indisponibles">
+            <p className="text-sm text-slate-400">
+              L&apos;authentification fonctionne sur le serveur réel. Les routes des
+              widgets arrivent en Phase 2 : repasse en mode mock
+              (NEXT_PUBLIC_USE_MOCK=true) pour travailler sur la grille.
+            </p>
+          </Card>
+        )}
+
+        {loadingState === "ready" && widgetsAvailable && (
           <>
             <div className="flex items-center justify-between">
               <p className="text-sm text-slate-400">

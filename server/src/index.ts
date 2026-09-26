@@ -35,6 +35,13 @@ app.get("/health", async (_req, res) => {
 });
 
 /*
+ Unknown route: answer JSON, like every other route.
+ */
+app.use((req, res) => {
+  res.status(404).json({ error: `Unknown route: ${req.method} ${req.path}` });
+});
+
+/*
  Startup in four steps:
  1. migrations: update the schema without destroying data
  2. registry: reflect ServiceProviders in services/widget_types
@@ -45,11 +52,9 @@ async function start() {
   try {
     await runMigrations();
     await syncRegistryToDatabase();
-
     await connectRedis();
     await redisSelfTest();
     console.log("[redis] connected, SET/GET self-test passed");
-
     app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
       console.log(`about.json: http://localhost:${PORT}/about.json`);
