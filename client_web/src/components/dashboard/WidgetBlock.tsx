@@ -23,7 +23,7 @@ export function WidgetBlock({ widget, widgetType, onRemove }: WidgetBlockProps) 
     >
       <header
         className="widget-drag-handle flex items-center justify-between gap-2
-                   px-3 py-2 border-b border-line cursor-move select-none"
+                   px-3 py-2 bg-raised border-b border-line cursor-move select-none"
       >
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-slate-500">{serviceName}</p>

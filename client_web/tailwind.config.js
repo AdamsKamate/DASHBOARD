@@ -3,14 +3,15 @@ module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-      // Colour palette.
       colors: {
-        ink: "#0A0E1A",      // page background
-        surface: "#141A2A",  // cards and inputs,
-        line: "#26304A",     // borders, 
-        signal: "#3B82F6",   // primary actions and links
-        flare: "#F87171",    // errors
-        pulse: "#34D399",    // success
+        ink: "#0D1117",      // page background
+        surface: "#161B22",  // cards and inputs, one step above the background
+        raised: "#1C2230",   // card headers
+        line: "#30363D",     // borders
+        signal: "#58A6FF",   // primary actions and links
+        flare: "#F85149",    // errors
+        pulse: "#3FB950",    // success
+        amber: "#D29922",    // warnings
       },
 
       // Typography.
