@@ -6,14 +6,25 @@ interface WidgetBlockProps {
   widget: WidgetInstance;
   widgetType: WidgetType | undefined;
   onRemove: (widgetId: string) => void;
+  /* Starts a move. Absent on read-only screens. */
+  onDragHandlePointerDown?: (event: React.PointerEvent) => void;
+  /* Arrow keys move the block, Shift + arrows resize it. */
+  onDragHandleKeyDown?: (event: React.KeyboardEvent) => void;
+  isEditable?: boolean;
 }
 
-export function WidgetBlock({ widget, widgetType, onRemove }: WidgetBlockProps) {
+export function WidgetBlock({
+  widget,
+  widgetType,
+  onRemove,
+  onDragHandlePointerDown,
+  onDragHandleKeyDown,
+  isEditable = false,
+}: WidgetBlockProps) {
   // A widget type can disappear from the registry (service removed on the
   // server). The block must still render, so the user can delete it.
   const title = widgetType?.name ?? widget.widgetTypeId;
   const serviceName = widgetType?.service ?? "unknown";
-
   const paramEntries = Object.entries(widget.params);
 
   return (
@@ -21,21 +32,35 @@ export function WidgetBlock({ widget, widgetType, onRemove }: WidgetBlockProps) 
       className="h-full flex flex-col rounded-md border border-line bg-surface overflow-hidden"
       aria-label={`Widget ${title}`}
     >
-      <header
-        className="widget-drag-handle flex items-center justify-between gap-2
-                   px-3 py-2 bg-raised border-b border-line cursor-move select-none"
-      >
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-slate-500">{serviceName}</p>
-          <h2 className="text-sm font-semibold text-white truncate">{title}</h2>
-        </div>
+      <header className="flex items-stretch justify-between gap-2 bg-raised border-b border-line">
+        {/* A button, not a div: it can be reached with Tab, and the arrow keys
+            then move the block. Dragging with a mouse and moving with the
+            keyboard use the same handle. */}
+        <button
+          type="button"
+          onPointerDown={onDragHandlePointerDown}
+          onKeyDown={onDragHandleKeyDown}
+          disabled={!isEditable}
+          // touch-none tells the browser we handle touch ourselves, otherwise
+          // a drag on a phone scrolls the page instead of moving the block.
+          className="flex-1 min-w-0 text-left px-3 py-2 touch-none select-none
+                     enabled:cursor-move disabled:cursor-default"
+          aria-label={
+            isEditable
+              ? `Déplacer le widget ${title}. Flèches pour déplacer, Maj + flèches pour redimensionner.`
+              : `Widget ${title}`
+          }
+        >
+          <span className="block text-xs uppercase tracking-wide text-slate-500">
+            {serviceName}
+          </span>
+          <span className="block text-sm font-semibold text-white truncate">{title}</span>
+        </button>
 
-        {/* widget-no-drag: a click on this button must delete, not start a
-            drag. react-grid-layout ignores elements carrying this class. */}
         <button
           type="button"
           onClick={() => onRemove(widget.id)}
-          className="widget-no-drag shrink-0 h-8 w-8 rounded-md text-slate-400
+          className="shrink-0 h-8 w-8 my-1 mr-2 rounded-md text-slate-400
                      hover:text-flare hover:bg-ink"
           aria-label={`Supprimer le widget ${title}`}
           title="Supprimer"
