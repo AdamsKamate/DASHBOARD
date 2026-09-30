@@ -109,3 +109,129 @@ export async function consumeAuthorizationState(
     return null;
   }
 }
+
+// Second half of the flow: exchanging the code for a token.
+
+/* What the provider gives back, normalised across providers. */
+export interface OAuthTokens {
+  accessToken: string;
+  /* Absent from GitHub, present on Google. */
+  refreshToken: string | null;
+  /* Computed from expires_in; null when the token does not expire. */
+  expiresAt: Date | null;
+  scope: string | null;
+  tokenType: string;
+}
+
+/* Raw answer of a token endpoint, before normalisation. */
+interface TokenEndpointResponse {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  token_type?: string;
+  error?: string;
+  error_description?: string;
+}
+
+/* Fails the exchange without ever carrying the token or the secret. */
+export class OAuthExchangeError extends Error {
+  constructor(message: string, public readonly providerError?: string) {
+    super(message);
+    this.name = "OAuthExchangeError";
+  }
+}
+
+/*
+ The exchange must not hang forever: a provider that never answers would
+ keep the user's browser waiting on our callback.
+ */
+const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
+
+/*
+ Reads the answer of a token endpoint.
+ */
+async function parseTokenResponse(response: Response): Promise<TokenEndpointResponse> {
+  const rawBody = await response.text();
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(rawBody) as TokenEndpointResponse;
+    } catch {
+      throw new OAuthExchangeError("The provider returned an unreadable JSON body");
+    }
+  }
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    return Object.fromEntries(new URLSearchParams(rawBody)) as TokenEndpointResponse;
+  }
+  // Unknown content type: try JSON first, then form encoding, rather than
+  // giving up on a provider that simply forgot its header.
+  try {
+    return JSON.parse(rawBody) as TokenEndpointResponse;
+  } catch {
+    return Object.fromEntries(new URLSearchParams(rawBody)) as TokenEndpointResponse;
+  }
+}
+
+/*
+ Exchanges an authorization code for a token.
+ */
+export async function exchangeCodeForTokens(
+  config: OAuthConfig,
+  code: string
+): Promise<OAuthTokens> {
+  const requestBody = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    // Sent again even though the provider already knows it.
+    redirect_uri: config.redirectUri,
+  });
+
+  let response: Response;
+  try {
+    response = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        // GitHub answers form encoded by default; this asks for JSON.
+        Accept: "application/json",
+      },
+      body: requestBody.toString(),
+      signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    // Network failure or timeout
+    throw new OAuthExchangeError(
+      `Could not reach the token endpoint: ${(error as Error).message}`
+    );
+  }
+  const tokenResponse = await parseTokenResponse(response);
+
+  // A provider can answer 200 with an error field in the body: checking the
+  // HTTP status alone is not enough.
+  if (tokenResponse.error) {
+    throw new OAuthExchangeError(
+      `The provider refused the exchange: ${tokenResponse.error_description ?? tokenResponse.error}`,
+      tokenResponse.error
+    );
+  }
+  if (!response.ok) {
+    throw new OAuthExchangeError(`The token endpoint answered ${response.status}`);
+  }
+  if (!tokenResponse.access_token) {
+    throw new OAuthExchangeError("The provider's answer contains no access token");
+  }
+  return {
+    accessToken: tokenResponse.access_token,
+    refreshToken: tokenResponse.refresh_token ?? null,
+    // expires_in is a number of seconds from now.
+    expiresAt: tokenResponse.expires_in
+      ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+      : null,
+    scope: tokenResponse.scope ?? null,
+    tokenType: tokenResponse.token_type ?? "bearer",
+  };
+}

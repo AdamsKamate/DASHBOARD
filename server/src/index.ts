@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import aboutRouter from "./routes/about";
 import authRouter from "./routes/auth";
+import oauthRouter from "./routes/oauth";
 import { runMigrations } from "./db/migrate";
 import { syncRegistryToDatabase } from "./db/repositories/services";
 import { ping, closePool } from "./db";
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(aboutRouter);
 app.use(authRouter);
+app.use(oauthRouter);
 
 // Check that the database and Redis respond without opening psql or redis-cli.
 app.get("/health", async (_req, res) => {
