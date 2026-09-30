@@ -12,7 +12,6 @@ type VerificationState = "checking" | "confirmed" | "failed";
 function VerificationResult() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-
   const [state, setState] = useState<VerificationState>("checking");
   const [failure, setFailure] = useState<DisplayableError | null>(null);
 
@@ -22,7 +21,6 @@ function VerificationResult() {
       setFailure({ message: "Lien invalide : aucun token n'a été fourni." });
       return;
     }
-
     let isStillMounted = true;
 
     // verifyAccountOnce, not api.auth.verify: React StrictMode runs this

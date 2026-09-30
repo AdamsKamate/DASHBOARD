@@ -17,7 +17,6 @@ import {
 import type { Service, WidgetInstance, WidgetType } from "@/lib/types";
 
 // Dashboard page: the widget grid (C10).
-
 type LoadingState = "loading" | "ready" | "failed";
 
 function isNotImplementedYet(error: unknown): boolean {
@@ -34,7 +33,6 @@ function DashboardContent() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [widgetsAvailable, setWidgetsAvailable] = useState(true);
-
   const loadDashboard = useCallback(async () => {
     setLoadingState("loading");
     try {
