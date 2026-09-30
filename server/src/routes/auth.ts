@@ -52,7 +52,6 @@ router.post("/auth/register", async (req: Request, res: Response) => {
   // Validation
   const emailCheck = validateEmail(email);
   const passwordCheck = validatePassword(password);
-
   if (!emailCheck.valid || !passwordCheck.valid) {
     return res.status(400).json({
       error: "Invalid input",
@@ -68,7 +67,6 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     // is passed to the repository and then stored in the database.
     const passwordHash = await hashPassword(password);
     const verificationToken = generateVerificationToken();
-
     const user = await createUser({
       email: normalizedEmail,
       passwordHash,
@@ -77,7 +75,6 @@ router.post("/auth/register", async (req: Request, res: Response) => {
 
     // Confirmation email
     const sent = await sendVerificationEmail(user.email, verificationToken);
-
     if (!sent) {
       if (isMailerConfigured()) {
         console.error(
@@ -104,11 +101,9 @@ router.post("/auth/register", async (req: Request, res: Response) => {
     });
   } catch (err) {
     const pgError = err as { code?: string };
-
     if (pgError.code === PG_UNIQUE_VIOLATION) {
       return res.status(409).json({ error: "Email already in use" });
     }
-
     console.error("[auth] registration failed:", (err as Error).message);
     return res.status(500).json({ error: "Internal server error" });
   }
