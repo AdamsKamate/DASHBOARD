@@ -1,6 +1,6 @@
 import type { Position, WidgetInstance } from "../types";
 
-// Grid layout logic.
+// Grid layout logic
 
 /* Number of columns of the reference (desktop) grid. Stored positions use it. */
 export const GRID_COLUMNS = 12;
@@ -13,15 +13,13 @@ export const MIN_BLOCK_HEIGHT = 2;
 export const NEW_BLOCK_WIDTH = 4;
 export const NEW_BLOCK_HEIGHT = 2;
 
-/* An item in the format react grid layout expects. */
+/* A block placed on the grid. */
 export interface GridItem {
   i: string;
   x: number;
   y: number;
   w: number;
   h: number;
-  minW?: number;
-  minH?: number;
 }
 
 export interface PositionChange {
@@ -36,11 +34,98 @@ export function toGridItem(widget: WidgetInstance): GridItem {
     y: widget.position.y,
     w: widget.position.w,
     h: widget.position.h,
-    minW: MIN_BLOCK_WIDTH,
-    minH: MIN_BLOCK_HEIGHT,
   };
 }
 
+// Collisions
+
+/* Two blocks overlap when they share at least one cell. */
+export function itemsOverlap(first: GridItem, second: GridItem): boolean {
+  if (first.i === second.i) {
+    return false;
+  }
+  const noHorizontalOverlap = first.x + first.w <= second.x || second.x + second.w <= first.x;
+  const noVerticalOverlap = first.y + first.h <= second.y || second.y + second.h <= first.y;
+  return !noHorizontalOverlap && !noVerticalOverlap;
+}
+
+function findOverlappingItems(items: GridItem[], candidate: GridItem): GridItem[] {
+  return items.filter((item) => itemsOverlap(item, candidate));
+}
+
+/*
+ Keeps a block inside the grid.
+ */
+export function clampToGrid(item: GridItem, columnCount = GRID_COLUMNS): GridItem {
+  const width = Math.min(Math.max(item.w, MIN_BLOCK_WIDTH), columnCount);
+  const height = Math.max(item.h, MIN_BLOCK_HEIGHT);
+  return {
+    ...item,
+    w: width,
+    h: height,
+    x: Math.min(Math.max(item.x, 0), columnCount - width),
+    y: Math.max(item.y, 0),
+  };
+}
+
+// Compaction
+/*
+ Pulls every block as high as it can go, without overlapping.
+ */
+export function compactVertically(items: GridItem[]): GridItem[] {
+  const sortedItems = [...items].sort((first, second) =>
+    first.y === second.y ? first.x - second.x : first.y - second.y
+  );
+  const placedItems: GridItem[] = [];
+  for (const item of sortedItems) {
+    const movingItem = { ...item };
+    // Rise one row at a time while the cell above stays free.
+    while (movingItem.y > 0) {
+      const oneRowHigher = { ...movingItem, y: movingItem.y - 1 };
+      if (findOverlappingItems(placedItems, oneRowHigher).length > 0) {
+        break;
+      }
+      movingItem.y -= 1;
+    }
+    placedItems.push(movingItem);
+  }
+
+  return placedItems;
+}
+
+/*
+ Pushes every block overlapping `movedItem` downwards, then their own
+ neighbours, and so on..
+ */
+function pushOverlappingItemsDown(items: GridItem[], movedItem: GridItem): GridItem[] {
+  let resolvedItems = [...items];
+  for (const collidingItem of findOverlappingItems(resolvedItems, movedItem)) {
+    const pushedItem = { ...collidingItem, y: movedItem.y + movedItem.h };
+    resolvedItems = resolvedItems.map((item) =>
+      item.i === pushedItem.i ? pushedItem : item
+    );
+    // The pushed block may now sit on another one.
+    resolvedItems = pushOverlappingItemsDown(resolvedItems, pushedItem);
+  }
+  return resolvedItems;
+}
+
+/*
+ Applies a new position to a block and repairs the grid around it.
+ */
+export function placeItem(
+  items: GridItem[],
+  itemId: string,
+  nextPosition: { x: number; y: number; w: number; h: number },
+  columnCount = GRID_COLUMNS
+): GridItem[] {
+  const movedItem = clampToGrid({ i: itemId, ...nextPosition }, columnCount);
+  const otherItems = items.filter((item) => item.i !== itemId);
+  const resolvedItems = pushOverlappingItemsDown([...otherItems, movedItem], movedItem);
+  return compactVertically(resolvedItems);
+}
+
+// Changes to save
 function samePosition(position: Position, item: GridItem): boolean {
   return (
     position.x === item.x &&
@@ -78,7 +163,6 @@ export function applyPositionChanges(
   changes: PositionChange[]
 ): WidgetInstance[] {
   const newPositionById = new Map(changes.map((change) => [change.widgetId, change.position]));
-
   return widgets.map((widget) => {
     const newPosition = newPositionById.get(widget.id);
     return newPosition ? { ...widget, position: newPosition } : widget;
@@ -94,4 +178,9 @@ export function findFreePosition(widgets: WidgetInstance[]): Position {
     0
   );
   return { x: 0, y: lowestBottomEdge, w: NEW_BLOCK_WIDTH, h: NEW_BLOCK_HEIGHT };
+}
+
+/* Number of rows the grid needs to show every block. */
+export function countRows(items: GridItem[]): number {
+  return items.reduce((rows, item) => Math.max(rows, item.y + item.h), 0);
 }
