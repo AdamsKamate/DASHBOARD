@@ -235,3 +235,75 @@ export async function exchangeCodeForTokens(
     tokenType: tokenResponse.token_type ?? "bearer",
   };
 }
+
+// Refreshing an expired token.
+
+/* Raised when the refresh fails and the user must authorize again. */
+export class OAuthRefreshError extends Error {
+  constructor(message: string, public readonly providerError?: string) {
+    super(message);
+    this.name = "OAuthRefreshError";
+  }
+}
+
+/*
+ Obtains a new access token from a refresh token.
+ */
+export async function refreshAccessToken(
+  config: OAuthConfig,
+  refreshToken: string
+): Promise<OAuthTokens> {
+  const requestBody = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+  });
+  let response: Response;
+  try {
+    response = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: requestBody.toString(),
+      signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new OAuthRefreshError(
+      `Could not reach the token endpoint: ${(error as Error).message}`
+    );
+  }
+
+  const tokenResponse = await parseTokenResponse(response);
+
+  if (tokenResponse.error) {
+    // invalid_grant means the refresh token itself is dead: the user revoked
+    // the access, or changed their password.
+    throw new OAuthRefreshError(
+      `The provider refused the refresh: ${tokenResponse.error_description ?? tokenResponse.error}`,
+      tokenResponse.error
+    );
+  }
+
+  if (!response.ok) {
+    throw new OAuthRefreshError(`The token endpoint answered ${response.status}`);
+  }
+
+  if (!tokenResponse.access_token) {
+    throw new OAuthRefreshError("The provider's answer contains no access token");
+  }
+
+  return {
+    accessToken: tokenResponse.access_token,
+    // Most providers do NOT send a new refresh token: the old one stays
+    // valid.
+    refreshToken: tokenResponse.refresh_token ?? null,
+    expiresAt: tokenResponse.expires_in
+      ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+      : null,
+    scope: tokenResponse.scope ?? null,
+    tokenType: tokenResponse.token_type ?? "bearer",
+  };
+}
