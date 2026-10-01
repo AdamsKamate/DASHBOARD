@@ -7,6 +7,7 @@ import {
   exchangeCodeForTokens,
   OAuthExchangeError,
 } from "../lib/oauth";
+import { linkService } from "../db/repositories/userServices";
 import type { ServiceProvider } from "../services/types";
 
 const router = Router();
@@ -91,14 +92,20 @@ router.get("/oauth/:service/callback", async (req: Request, res: Response) => {
     return res.redirect(frontendRedirect("/services", { error: "unknown_service" }));
   }
 
-  // 4. Exchange, server to server. The client_secret travels here and only
-  // here; it never reaches the browser.
+  // 4. Exchange, server to server. 
   try {
     const tokens = await exchangeCodeForTokens(provider.getOAuthConfig!(), code);
+    // 5. Store the link.
+    await linkService(authorizationRequest.userId, serviceName, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+    });
+
     // Never log the token itself: server logs are readable by more people
     // than the database, and a leaked token grants access to the account.
     console.log(
-      `[oauth] token obtained for user ${authorizationRequest.userId} on ${serviceName} ` +
+      `[oauth] ${serviceName} linked to user ${authorizationRequest.userId} ` +
         `(expires: ${tokens.expiresAt?.toISOString() ?? "never"}, ` +
         `refresh token: ${tokens.refreshToken ? "yes" : "no"})`
     );
