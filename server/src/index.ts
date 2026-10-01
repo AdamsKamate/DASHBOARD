@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import aboutRouter from "./routes/about";
+import aboutRouter, { checkRegistryQuota } from "./routes/about";
 import authRouter from "./routes/auth";
 import oauthRouter from "./routes/oauth";
 import { runMigrations } from "./db/migrate";
@@ -54,6 +54,7 @@ async function start() {
   try {
     await runMigrations();
     await syncRegistryToDatabase();
+    checkRegistryQuota();
     await connectRedis();
     await redisSelfTest();
     console.log("[redis] connected, SET/GET self-test passed");
