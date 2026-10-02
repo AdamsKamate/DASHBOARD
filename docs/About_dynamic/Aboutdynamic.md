@@ -22,7 +22,7 @@ The two had already diverged. At startup, the logs stated:
 [db] registry synchronized: 1 service(s), 2 widget(s)
 ```
 
-whereas `about.json` declared four services and eight widgets. The file was announcing services unknown to the server—an evaluator attempting to hit a GitHub widget endpoint would have encountered an error after reading that it existed.
+whereas `about.json` declared four services and eight widgets. The file was announcing services unknown to the server an evaluator attempting to hit a GitHub widget endpoint would have encountered an error after reading that it existed.
 
 The issue was duplication, not oversight: maintaining two manual lists always leads to divergence.
 
@@ -55,7 +55,7 @@ export function buildAboutServices(): AboutService[] {
 }
 ```
 
-This is the concrete benefit of the `ServiceProvider` pattern selected in Phase 0: a widget's definition—its name, description, and required parameters—lives in a single place, and everything else derives from it.
+This is the concrete benefit of the `ServiceProvider` pattern selected in Phase 0: a widget's definition its name, description, and required parameters lives in a single place, and everything else derives from it.
 
 ---
 
@@ -163,7 +163,7 @@ An automated test checks that the timestamp consists of exactly ten digits.
 return rawAddress.replace(/^::ffff:/, "");
 ```
 
-Inside Docker containers, Express often receives `::ffff:172.18.0.1`—an IPv4 address mapped inside an IPv6 structure. The spec example requires a plain IPv4 string like `10.101.53.35`, so the prefix is stripped.
+Inside Docker containers, Express often receives `::ffff:172.18.0.1` n IPv4 address mapped inside an IPv6 structure. The spec example requires a plain IPv4 string like `10.101.53.35`, so the prefix is stripped.
 
 ---
 
@@ -195,7 +195,7 @@ The two log entries now **match**. Prior to this card, `about.json` reported fou
 curl -s http://localhost:8080/about.json | python3 -m json.tool
 ```
 
-Expected: a single service, `weather`, with its two widgets—matching `registry.ts` exactly.
+Expected: a single service, `weather`, with its two widgets matching `registry.ts` exactly.
 
 ```bash
 curl -s http://localhost:8080/about.json \
