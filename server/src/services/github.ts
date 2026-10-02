@@ -1,7 +1,7 @@
 import { ServiceProvider, WidgetDefinition, OAuthConfig } from "./types";
 
 // Minimal GitHub provider: just enough to exercise the OAuth link flow end
-// to end. Widgets arrive later — the array stays empty for now.
+// to end.
 
 function getOAuthConfig(): OAuthConfig {
   return {
