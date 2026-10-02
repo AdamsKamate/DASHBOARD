@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card, FormError } from "@/components/ui";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
@@ -127,6 +128,9 @@ function DashboardContent() {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          <Link href="/services">
+            <Button variant="secondary">Services</Button>
+          </Link>
           <span className="text-sm text-slate-400">{user?.email}</span>
           <Button variant="secondary" onClick={handleLogout}>
             Se déconnecter
