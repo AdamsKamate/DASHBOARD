@@ -3,7 +3,16 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Button, Card, FormError, Input } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { Position, Service, WidgetInstance, WidgetParams, WidgetType } from "@/lib/types";
+import type { Position, Service, WidgetInstance, WidgetType } from "@/lib/types";
+import { WidgetParamsForm } from "@/components/widgets/WidgetParamsForm";
+import {
+  FieldErrors,
+  FieldValues,
+  createEmptyValues,
+  hasNoError,
+  toWidgetParams,
+  validateFieldValues,
+} from "@/lib/widgets/params";
 
 // Add a widget to the dashboard.
 
@@ -16,21 +25,6 @@ interface AddWidgetPanelProps {
   position: Position;
   onCreated: (widget: WidgetInstance) => void;
   onCancel: () => void;
-}
-
-/* The raw text of each field, converted to the declared types on submit. */
-type FieldValues = Record<string, string>;
-
-function toWidgetParams(widgetType: WidgetType, fieldValues: FieldValues): WidgetParams {
-  const params: WidgetParams = {};
-  for (const param of widgetType.params) {
-    const rawValue = fieldValues[param.name] ?? "";
-    // An empty integer field stays "": the server then answers "is required",
-    // which is clearer than silently sending 0.
-    params[param.name] =
-      param.type === "integer" && rawValue !== "" ? Number(rawValue) : rawValue;
-  }
-  return params;
 }
 
 export function AddWidgetPanel({
@@ -55,6 +49,7 @@ export function AddWidgetPanel({
   const [selectedTypeId, setSelectedTypeId] = useState(availableWidgetTypes[0]?.id ?? "");
   const [fieldValues, setFieldValues] = useState<FieldValues>({});
   const [refreshRate, setRefreshRate] = useState(String(DEFAULT_REFRESH_RATE_SECONDS));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<{ message: string; details?: string[] } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,7 +59,9 @@ export function AddWidgetPanel({
     setSelectedTypeId(widgetTypeId);
     // Each type has its own parameters: values typed for the previous one
     // would not make sense here.
-    setFieldValues({});
+    const nextType = availableWidgetTypes.find((widgetType) => widgetType.id === widgetTypeId);
+    setFieldValues(nextType ? createEmptyValues(nextType.params) : {});
+    setFieldErrors({});
     setFormError(null);
   }
 
@@ -73,12 +70,21 @@ export function AddWidgetPanel({
     if (!selectedType) return;
 
     setFormError(null);
+
+    // Checked here as well as on the server: the user sees which field to fix
+    // straight away, without a round trip.
+    const validationErrors = validateFieldValues(selectedType.params, fieldValues);
+    setFieldErrors(validationErrors);
+    if (!hasNoError(validationErrors)) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const createdWidget = await api.widgets.create({
         widgetTypeId: selectedType.id,
-        params: toWidgetParams(selectedType, fieldValues),
+        params: toWidgetParams(selectedType.params, fieldValues),
         refreshRate: Number(refreshRate),
         position,
       });
@@ -129,19 +135,18 @@ export function AddWidgetPanel({
           {selectedType && <p className="text-xs text-slate-500">{selectedType.description}</p>}
         </div>
 
-        {selectedType?.params.map((param) => (
-          <Input
-            key={`${selectedType.id}-${param.name}`}
-            label={param.name}
-            type={param.type === "integer" ? "number" : "text"}
-            inputMode={param.type === "integer" ? "numeric" : undefined}
-            value={fieldValues[param.name] ?? ""}
-            onChange={(event) =>
-              setFieldValues((previous) => ({ ...previous, [param.name]: event.target.value }))
+        {selectedType && (
+          <WidgetParamsForm
+            idPrefix={`add-${selectedType.id}`}
+            params={selectedType.params}
+            values={fieldValues}
+            errors={fieldErrors}
+            disabled={isSubmitting}
+            onChange={(paramName, value) =>
+              setFieldValues((previous) => ({ ...previous, [paramName]: value }))
             }
-            required
           />
-        ))}
+        )}
 
         <Input
           label={`Rafraîchissement (secondes, minimum ${MIN_REFRESH_RATE_SECONDS})`}
