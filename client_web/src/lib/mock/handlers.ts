@@ -179,10 +179,21 @@ function generateFakeData(widgetTypeId: string, params: WidgetParams): Record<st
 
   switch (widgetTypeId) {
     case "city_temperature":
+      {
+        const city = String(params.city ?? "");
+        const isTokyo = city.toLowerCase() === "tokyo";
+
       return {
-        city: params.city,
-        temperature: 12 + variation + 0.4,
-        condition: "Partly cloudy",
+          city,
+          country: isTokyo ? "Japon" : "France",
+          temperature: isTokyo ? 13.4 : 12 + variation + 0.4,
+          temperatureUnit: "°C",
+          windSpeed: 11.2,
+          windSpeedUnit: "km/h",
+          condition: "Partiellement nuageux",
+          weatherCode: 2,
+          observedAt: "2026-10-02T14:00",
+        };
       };
 
     case "weather_forecast":

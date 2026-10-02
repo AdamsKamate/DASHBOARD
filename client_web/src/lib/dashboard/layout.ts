@@ -11,7 +11,7 @@ export const MIN_BLOCK_HEIGHT = 2;
 
 /* Size given to a newly added block. */
 export const NEW_BLOCK_WIDTH = 4;
-export const NEW_BLOCK_HEIGHT = 2;
+export const NEW_BLOCK_HEIGHT = 3;
 
 /* A block placed on the grid. */
 export interface GridItem {
