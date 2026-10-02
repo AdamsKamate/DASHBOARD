@@ -9,6 +9,7 @@ import { runMigrations } from "./db/migrate";
 import { syncRegistryToDatabase } from "./db/repositories/services";
 import { ping, closePool } from "./db";
 import { connectRedis, redisSelfTest, pingRedis, closeRedis } from "./lib/redis";
+import servicesRouter from "./routes/services";
 
 const app = express();
 const PORT = 8080; // required by the assignment, do not make configurable
@@ -24,6 +25,7 @@ app.use(cookieParser());
 app.use(aboutRouter);
 app.use(authRouter);
 app.use(oauthRouter);
+app.use(servicesRouter); 
 
 // Check that the database and Redis respond without opening psql or redis-cli.
 app.get("/health", async (_req, res) => {
