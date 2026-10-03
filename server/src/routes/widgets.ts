@@ -15,8 +15,8 @@ import {
   saveWidgetError,
   updateWidget,
 } from "../db/repositories/widgets";
-import { getValidAccessToken, TokenUnavailableError } from "../lib/tokenProvider";
-import { ExternalApiError } from "../lib/httpClient";
+import { refreshWidget, findWidgetDefinition } from "../jobs/refreshWidget";
+import { scheduleWidgetRefresh, removeWidgetRefresh } from "../jobs/queue";
 import type { WidgetDefinition } from "../services/types";
 
 const router = Router();
@@ -26,19 +26,6 @@ const router = Router();
 const DEFAULT_POSITION: WidgetPosition = { x: 0, y: 0, w: 4, h: 2 };
 const MIN_REFRESH_RATE = 30;
 const MAX_REFRESH_RATE = 86_400;
-
-/* Finds a widget definition and the service that owns it. */
-function findWidgetDefinition(
-  widgetTypeId: string
-): { serviceName: string; requiresAuth: boolean; widget: WidgetDefinition } | null {
-  for (const provider of registry) {
-    const widget = provider.widgets.find((candidate) => candidate.name === widgetTypeId);
-    if (widget) {
-      return { serviceName: provider.name, requiresAuth: provider.requiresAuth, widget };
-    }
-  }
-  return null;
-}
 
 /*
  GET /widget-types
@@ -84,7 +71,7 @@ function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] 
     }
 
     if (declaredParam.type === "integer") {
-      // Accepts 3 and "3": a form sends strings, an API client sends numbers.
+      // Accepts 3 and "3": a form sends strings, an API client sends numbers
       const parsedValue = typeof value === "string" ? Number(value) : value;
       if (typeof parsedValue !== "number" || !Number.isInteger(parsedValue)) {
         details.push(`${declaredParam.name} must be an integer`);
@@ -95,7 +82,7 @@ function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] 
   }
 
   // An undeclared parameter is rejected rather than ignored: silently
-  // dropping it would let a user believe their setting was taken into account.
+  // dropping it would let a user believe their setting was taken into account
   const declaredNames = new Set(widget.params.map((param) => param.name));
   for (const givenName of Object.keys(params)) {
     if (!declaredNames.has(givenName)) {
@@ -105,10 +92,9 @@ function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] 
   return details;
 }
 
-/** Normalises the parameters to their declared types before storing them. */
+/* Normalises the parameters to their declared types before storing them */
 function normaliseParams(widget: WidgetDefinition, rawParams: Record<string, unknown>): WidgetParams {
   const params: WidgetParams = {};
-
   for (const declaredParam of widget.params) {
     const value = rawParams[declaredParam.name];
     params[declaredParam.name] =
@@ -136,7 +122,6 @@ function validatePosition(value: unknown): string[] {
   }
   const position = value as Record<string, unknown>;
   const details: string[] = [];
-
   for (const key of ["x", "y", "w", "h"] as const) {
     const coordinate = position[key];
     if (typeof coordinate !== "number" || !Number.isInteger(coordinate) || coordinate < 0) {
@@ -146,7 +131,7 @@ function validatePosition(value: unknown): string[] {
   return details;
 }
 
-/* True when the user may use this widget: no auth needed, or account linked. */
+/* True when the user may use this widget: no auth needed, or account linked */
 async function canUseService(
   userId: string,
   serviceName: string,
@@ -171,7 +156,6 @@ router.get("/widgets", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/widgets", requireAuth, async (req: Request, res: Response) => {
   const { widgetTypeId, params, refreshRate, position } = req.body ?? {};
-
   const definition = typeof widgetTypeId === "string" ? findWidgetDefinition(widgetTypeId) : null;
   if (!definition) {
     return res.status(400).json({
@@ -200,6 +184,16 @@ router.post("/widgets", requireAuth, async (req: Request, res: Response) => {
       refreshRate: refreshRate ?? 300,
       position: (position as WidgetPosition) ?? DEFAULT_POSITION,
     });
+    // The Timer picks it up from here: one repeatable job per instance, at
+    // its own refresh rate (C9)
+    await scheduleWidgetRefresh(
+      createdWidget.id,
+      req.user!.userId,
+      createdWidget.widgetTypeId,
+      createdWidget.params,
+      createdWidget.refreshRate
+    );
+
     return res.status(201).json(createdWidget);
   } catch (error) {
     console.error("[widgets] create failed:", (error as Error).message);
@@ -214,7 +208,7 @@ router.patch("/widgets/:id", requireAuth, async (req: Request, res: Response) =>
     const existingWidget = await findUserWidget(req.user!.userId, req.params.id);
     if (!existingWidget) {
       // 404 and not 403: an instance owned by someone else must behave as if
-      // it did not exist, so its id is never confirmed.
+      // it did not exist, so its id is never confirmed
       return res.status(404).json({ error: "Widget not found" });
     }
 
@@ -246,9 +240,23 @@ router.patch("/widgets/:id", requireAuth, async (req: Request, res: Response) =>
     });
 
     // Changing the parameters invalidates the cached data: it was fetched for
-    // Paris and the widget now asks for Tokyo.
+    // Paris and the widget now asks for Tokyo
     if (params !== undefined) {
       await clearWidgetCache(req.params.id);
+    }
+
+    /*
+     Rescheduled on every change: a new interval needs a new timer, and new
+     parameters must reach the job, which carries them
+     */
+    if (updatedWidget) {
+      await scheduleWidgetRefresh(
+        updatedWidget.id,
+        req.user!.userId,
+        updatedWidget.widgetTypeId,
+        updatedWidget.params,
+        updatedWidget.refreshRate
+      );
     }
 
     return res.json(updatedWidget);
@@ -264,6 +272,10 @@ router.delete("/widgets/:id", requireAuth, async (req: Request, res: Response) =
     if (!wasDeleted) {
       return res.status(404).json({ error: "Widget not found" });
     }
+
+    // Left behind, the job would keep firing on a row that no longer exists
+    await removeWidgetRefresh(req.params.id);
+
     return res.status(204).send();
   } catch (error) {
     console.error("[widgets] delete failed:", (error as Error).message);
@@ -275,12 +287,7 @@ router.delete("/widgets/:id", requireAuth, async (req: Request, res: Response) =
  GET /widgets/:id/data
 
  Answers the cached data. API.md states this route never calls an external
- API: the Timer feeds the cache in the background.
-
- Until the Timer exists (Phase 3), an empty cache would leave every widget on
- "pending" forever, with nothing to show. So a miss falls back to fetching
- once, synchronously, and storing the result. The contract seen by the front
- end is unchanged, and the fallback disappears when the worker arrives.
+ API: the Timer feeds the cache in the background
  */
 router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -299,54 +306,12 @@ router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response)
       });
     }
 
-    const refreshed = await refreshWidgetNow(req.user!.userId, widget.id, widget.widgetTypeId, widget.params);
+    const refreshed = await refreshWidget(req.user!.userId, widget.id, widget.widgetTypeId, widget.params);
     return res.json(refreshed);
   } catch (error) {
     console.error("[widgets] data failed:", (error as Error).message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
-/*
- Fetches a widget's data once and stores it.
- */
-async function refreshWidgetNow(
-  userId: string,
-  widgetId: string,
-  widgetTypeId: string,
-  params: WidgetParams
-) {
-  const definition = findWidgetDefinition(widgetTypeId);
-
-  if (!definition) {
-    const message = "This widget type no longer exists";
-    await saveWidgetError(widgetId, message);
-    return { data: null, fetchedAt: new Date().toISOString(), status: "error", error: message };
-  }
-
-  try {
-    let accessToken: string | undefined;
-    if (definition.requiresAuth) {
-      // Refreshes the token when needed: a widget must keep working after the
-      // initial token expires.
-      accessToken = await getValidAccessToken(userId, definition.serviceName);
-    }
-
-    const data = await definition.widget.fetch(params, accessToken);
-    await saveWidgetData(widgetId, data);
-
-    return { data, fetchedAt: new Date().toISOString(), status: "ok" };
-  } catch (error) {
-    // The user sees why: a wrong city and a provider outage call for
-    // different actions on their side.
-    const message =
-      error instanceof ExternalApiError || error instanceof TokenUnavailableError
-        ? error.message
-        : "Les données n'ont pas pu être récupérées.";
-
-    await saveWidgetError(widgetId, message);
-    return { data: null, fetchedAt: new Date().toISOString(), status: "error", error: message };
-  }
-}
 
 export default router;
