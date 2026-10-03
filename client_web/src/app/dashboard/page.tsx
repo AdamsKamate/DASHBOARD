@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card, FormError } from "@/components/ui";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
-import { AddWidgetPanel } from "@/components/dashboard/AddWidgetPanel";
+import { AddWidgetModal } from "@/components/dashboard/AddWidgetModal";
 import { api, ApiError, USE_MOCK } from "@/lib/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { RequireAuth } from "@/lib/auth/guards";
@@ -179,7 +179,7 @@ function DashboardContent() {
 
             {isAddPanelOpen && (
               <div className="max-w-md">
-                <AddWidgetPanel
+                <AddWidgetModal
                   widgetTypes={widgetTypes}
                   services={services}
                   position={findFreePosition(widgets)}

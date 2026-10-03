@@ -81,7 +81,7 @@ export function WidgetBlock({
           </dl>
         )}
         <p className="text-xs text-slate-500">
-          Rafraîchi toutes les {widget.refreshRate} s · données en Phase 2
+          Rafraîchi toutes les {widget.refreshRate} s . données en Phase 2
         </p>
       </div>
     </article>
