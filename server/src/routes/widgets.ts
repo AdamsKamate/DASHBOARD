@@ -16,12 +16,17 @@ import {
   updateWidget,
 } from "../db/repositories/widgets";
 import { refreshWidget, findWidgetDefinition } from "../jobs/refreshWidget";
-import { scheduleWidgetRefresh, removeWidgetRefresh } from "../jobs/queue";
+import {
+  scheduleWidgetRefresh,
+  removeWidgetRefresh,
+  runWidgetRefreshNow,
+  describeWidgetJob,
+} from "../jobs/queue";
 import type { WidgetDefinition } from "../services/types";
 
 const router = Router();
 
-// Widget types and widget instances.
+// Widget types and widget instances
 
 const DEFAULT_POSITION: WidgetPosition = { x: 0, y: 0, w: 4, h: 2 };
 const MIN_REFRESH_RATE = 30;
@@ -29,9 +34,6 @@ const MAX_REFRESH_RATE = 86_400;
 
 /*
  GET /widget-types
-
- Feeds the configuration form generated on the front end: every type with its
- declared parameters.
  */
 router.get("/widget-types", requireAuth, (_req: Request, res: Response) => {
   const widgetTypes = registry.flatMap((provider) =>
@@ -51,7 +53,7 @@ router.get("/widget-types", requireAuth, (_req: Request, res: Response) => {
 // Validation
 
 /*
- Checks the parameters against what the widget declares.
+ Checks the parameters against what the widget declares
  */
 function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] {
   const details: string[] = [];
@@ -239,23 +241,40 @@ router.patch("/widgets/:id", requireAuth, async (req: Request, res: Response) =>
       position,
     });
 
-    // Changing the parameters invalidates the cached data: it was fetched for
-    // Paris and the widget now asks for Tokyo
-    if (params !== undefined) {
-      await clearWidgetCache(req.params.id);
+    if (!updatedWidget) {
+      return res.status(404).json({ error: "Widget not found" });
     }
 
     /*
-     Rescheduled on every change: a new interval needs a new timer, and new
-     parameters must reach the job, which carries them
+     Only two changes concern the job, and telling them apart matters
      */
-    if (updatedWidget) {
+    const intervalChanged = refreshRate !== undefined && refreshRate !== existingWidget.refreshRate;
+    const paramsChanged =
+      params !== undefined &&
+      JSON.stringify(updatedWidget.params) !== JSON.stringify(existingWidget.params);
+
+    if (intervalChanged || paramsChanged) {
       await scheduleWidgetRefresh(
         updatedWidget.id,
         req.user!.userId,
         updatedWidget.widgetTypeId,
         updatedWidget.params,
         updatedWidget.refreshRate
+      );
+    }
+
+    if (paramsChanged) {
+      // The cached data was fetched for Paris and the widget now asks for
+      // Tokyo: it must not stay on screen
+      await clearWidgetCache(req.params.id);
+
+      // And a refresh is queued at once, otherwise the block would sit empty
+      // until the next tick up to an hour for a slow widget
+      await runWidgetRefreshNow(
+        updatedWidget.id,
+        req.user!.userId,
+        updatedWidget.widgetTypeId,
+        updatedWidget.params
       );
     }
 
@@ -266,16 +285,41 @@ router.patch("/widgets/:id", requireAuth, async (req: Request, res: Response) =>
   }
 });
 
+/*
+ GET /widgets/:id/job
+ */
+router.get("/widgets/:id/job", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const widget = await findUserWidget(req.user!.userId, req.params.id);
+    if (!widget) {
+      return res.status(404).json({ error: "Widget not found" });
+    }
+
+    const jobState = await describeWidgetJob(widget.id);
+
+    return res.json({
+      // What the user configured
+      refreshRate: widget.refreshRate,
+      // What the queue is really doing null means no job is scheduled,
+      // which happens when the worker has never run
+      scheduled: jobState !== null,
+      intervalSeconds: jobState?.intervalSeconds ?? null,
+      nextRunAt: jobState?.nextRunAt?.toISOString() ?? null,
+    });
+  } catch (error) {
+    console.error("[widgets] job state failed:", (error as Error).message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.delete("/widgets/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const wasDeleted = await deleteWidget(req.user!.userId, req.params.id);
     if (!wasDeleted) {
       return res.status(404).json({ error: "Widget not found" });
     }
-
     // Left behind, the job would keep firing on a row that no longer exists
     await removeWidgetRefresh(req.params.id);
-
     return res.status(204).send();
   } catch (error) {
     console.error("[widgets] delete failed:", (error as Error).message);
@@ -285,9 +329,6 @@ router.delete("/widgets/:id", requireAuth, async (req: Request, res: Response) =
 
 /*
  GET /widgets/:id/data
-
- Answers the cached data. API.md states this route never calls an external
- API: the Timer feeds the cache in the background
  */
 router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -295,7 +336,6 @@ router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response)
     if (!widget) {
       return res.status(404).json({ error: "Widget not found" });
     }
-
     const cached = await findWidgetCache(widget.id);
     if (cached.status !== "pending") {
       return res.json({
@@ -305,7 +345,6 @@ router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response)
         ...(cached.error ? { error: cached.error } : {}),
       });
     }
-
     const refreshed = await refreshWidget(req.user!.userId, widget.id, widget.widgetTypeId, widget.params);
     return res.json(refreshed);
   } catch (error) {
