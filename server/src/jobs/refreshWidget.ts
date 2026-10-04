@@ -1,10 +1,11 @@
 import { registry } from "../services/registry";
-import { saveWidgetData, saveWidgetError, WidgetParams } from "../db/repositories/widgets";
+import { WidgetParams } from "../db/repositories/widgets";
+import { writeWidgetData, writeWidgetError } from "../lib/widgetCache";
 import { getValidAccessToken, TokenUnavailableError } from "../lib/tokenProvider";
 import { ExternalApiError } from "../lib/httpClient";
 import type { WidgetDefinition } from "../services/types";
 
-// Refreshing one widget instance.
+// Refreshing one widget instance
 
 export interface RefreshResult {
   data: Record<string, unknown> | null;
@@ -38,7 +39,7 @@ export async function refreshWidget(
     // The service was removed from the registry while an instance still
     // referenced it. Storing the reason beats failing silently
     const message = "Ce type de widget n'existe plus.";
-    await saveWidgetError(widgetId, message);
+    await writeWidgetError(widgetId, message);
     return { data: null, fetchedAt: new Date().toISOString(), status: "error", error: message };
   }
 
@@ -52,7 +53,7 @@ export async function refreshWidget(
     }
 
     const data = await definition.widget.fetch(params, accessToken);
-    await saveWidgetData(widgetId, data);
+    await writeWidgetData(widgetId, data);
 
     return { data, fetchedAt: new Date().toISOString(), status: "ok" };
   } catch (error) {
@@ -62,7 +63,7 @@ export async function refreshWidget(
       error instanceof ExternalApiError || error instanceof TokenUnavailableError
         ? error.message
         : "Les données n'ont pas pu être récupérées.";
-    await saveWidgetError(widgetId, message);
+    await writeWidgetError(widgetId, message);
     return { data: null, fetchedAt: new Date().toISOString(), status: "error", error: message };
   }
 }
