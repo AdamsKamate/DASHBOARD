@@ -41,14 +41,14 @@ export function getRefreshQueue(): Queue<RefreshJobData> {
 }
 
 /*
- The job identifier of an instance.
+ The job identifier of an instance
  */
 function jobIdFor(widgetId: string): string {
   return `widget:${widgetId}`;
 }
 
 /*
- Schedules, or re-schedules, the refresh of one instance.
+ Schedules, or re-schedules, the refresh of one instance
  */
 export async function scheduleWidgetRefresh(
   widgetId: string,
@@ -73,7 +73,7 @@ export async function scheduleWidgetRefresh(
   );
 }
 
-/* Removes the schedule of an instance, on deletion. */
+/* Removes the schedule of an instance, on deletion */
 export async function removeWidgetRefresh(widgetId: string): Promise<void> {
   const queue = getRefreshQueue();
   const repeatableJobs: RepeatableJob[] = await queue.getRepeatableJobs();
@@ -106,7 +106,7 @@ export async function syncJobsWithDatabase(): Promise<{
     `SELECT id, user_id, widget_type_id, params, refresh_rate FROM widget_instances`
   );
   const existingJobs: RepeatableJob[] = await queue.getRepeatableJobs();
-  const existingJobIds = new Map<string | undefined, RepeatableJob>(
+  const existingJobIds = new Map<string | null | undefined, RepeatableJob>(
     existingJobs.map((job) => [job.id, job])
   );
 
@@ -147,4 +147,52 @@ export async function closeRefreshQueue(): Promise<void> {
     await queueInstance.close();
     queueInstance = null;
   }
+}
+
+// Inspecting and triggering jobs.
+
+export interface WidgetJobState {
+  /* The interval actually registered in Redis, in seconds. */
+  intervalSeconds: number;
+  /* When the job is due to fire next. */
+  nextRunAt: Date | null;
+}
+
+/*
+ Reads the schedule of one instance, as Redis holds it.
+ */
+export async function describeWidgetJob(widgetId: string): Promise<WidgetJobState | null> {
+  const queue = getRefreshQueue();
+  const repeatableJobs: RepeatableJob[] = await queue.getRepeatableJobs();
+  const job = repeatableJobs.find((candidate) => candidate.id === jobIdFor(widgetId));
+  if (!job) {
+    return null;
+  }
+  return {
+    intervalSeconds: Math.round(Number(job.every) / 1000),
+    nextRunAt: job.next ? new Date(job.next) : null,
+  };
+}
+
+/*
+ Runs one refresh immediately, outside the repeating schedule
+*/
+export async function runWidgetRefreshNow(
+  widgetId: string,
+  userId: string,
+  widgetTypeId: string,
+  params: WidgetParams
+): Promise<void> {
+  const queue = getRefreshQueue();
+
+  await queue.add(
+    REFRESH_QUEUE_NAME,
+    { widgetId, userId, widgetTypeId, params },
+    {
+      // No jobId: this one is disposable, and reusing the repeatable job's
+      // identifier would make BullMQ reject it as a duplicate
+      removeOnComplete: true,
+      removeOnFail: true,
+    }
+  );
 }
