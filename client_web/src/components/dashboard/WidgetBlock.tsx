@@ -1,21 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
 import { LoadingState, WidgetDataView } from "@/components/widgets/WidgetDataView";
 import { formatRelativeTime } from "@/lib/widgets/display";
 import { displayValue, paramLabel } from "@/lib/widgets/params";
 import type { WidgetData, WidgetInstance, WidgetType } from "@/lib/types";
+import { useWidgetData } from "@/lib/widgets/useWidgetData";
+import { isStale } from "@/lib/widgets/freshness";
+import type { WidgetInstance, WidgetType } from "@/lib/types";
 
-// One block of the grid.
+// One block of the grid
 
 interface WidgetBlockProps {
   widget: WidgetInstance;
   widgetType: WidgetType | undefined;
   onRemove: (widgetId: string) => void;
-  /* Starts a move. Absent on read-only screens. */
+  /* Starts a move. Absent on read-only screens */
   onDragHandlePointerDown?: (event: React.PointerEvent) => void;
-  /* Arrow keys move the block, Shift + arrows resize it. */
+  /* Arrow keys move the block, Shift + arrows resize it */
   onDragHandleKeyDown?: (event: React.KeyboardEvent) => void;
   isEditable?: boolean;
 }
@@ -29,7 +30,7 @@ export function WidgetBlock({
   isEditable = false,
 }: WidgetBlockProps) {
   // A widget type can disappear from the registry (service removed on the
-  // server). The block must still render, so the user can delete it.
+  // server). The block must still render, so the user can delete it
   const title = widgetType?.name ?? widget.widgetTypeId;
   const serviceName = widgetType?.service ?? "unknown";
   /*
@@ -49,37 +50,15 @@ export function WidgetBlock({
     })
     .filter(([, shownValue]) => shownValue !== "");
 
-  const [dataState, setDataState] = useState<WidgetData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isInitialLoading, isRefreshing, clockTick, refresh } = useWidgetData(
+    widget.id,
+    widget.refreshRate,
+    widget.params
+  );
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setDataState(await api.widgets.data(widget.id));
-    } catch (error) {
-      // A 404 means the route is not on the server yet: saying so is more
-      // useful than claiming the widget failed.
-      const notImplementedYet = error instanceof ApiError && error.status === 404;
-      setDataState({
-        data: null,
-        fetchedAt: null,
-        status: "error",
-        error: notImplementedYet
-          ? "Données disponibles en Phase 3."
-          : "Les données n'ont pas pu être récupérées.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [widget.id]);
-
-  /*
-   Reloaded when the parameters change: reconfiguring a widget resets its
-   cache, so the data on screen no longer matches what it shows.
-   */
-  useEffect(() => {
-    loadData();
-  }, [loadData, widget.params]);
+  // clockTick is read so React redraws the age below; its value is unused
+  void clockTick;
+  const isDataStale = isStale(data?.fetchedAt ?? null, widget.refreshRate);
 
   return (
     <article
@@ -89,14 +68,14 @@ export function WidgetBlock({
       <header className="flex items-stretch justify-between gap-2 bg-raised border-b border-line">
         {/* A button, not a div: it can be reached with Tab, and the arrow keys
             then move the block. Dragging with a mouse and moving with the
-            keyboard use the same handle. */}
+            keyboard use the same handle */}
         <button
           type="button"
           onPointerDown={onDragHandlePointerDown}
           onKeyDown={onDragHandleKeyDown}
           disabled={!isEditable}
-          // touch-none tells the browser we handle touch ourselves, otherwise
-          // a drag on a phone scrolls the page instead of moving the block.
+          // touch none tells the browser we handle touch ourselves, otherwise
+          // a drag on a phone scrolls the page instead of moving the block
           className="flex-1 min-w-0 text-left px-3 py-2 touch-none select-none
                      enabled:cursor-move disabled:cursor-default"
           aria-label={
@@ -109,6 +88,30 @@ export function WidgetBlock({
             {serviceName}
           </span>
           <span className="block text-sm font-semibold text-white truncate">{title}</span>
+        </button>
+
+        {/* Shown only during a background refresh: the content stays on
+            screen, and this says why it is about to change */}
+        {isRefreshing && (
+          <span
+            role="status"
+            aria-label="Rafraîchissement en cours"
+            title="Rafraîchissement en cours"
+            className="shrink-0 self-center h-3 w-3 rounded-full border-2
+                       border-signal border-t-transparent animate-spin"
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={isRefreshing}
+          className="widget-no-drag shrink-0 h-8 w-8 my-1 rounded-md text-slate-400
+                     hover:text-signal hover:bg-ink disabled:opacity-40"
+          aria-label={`Rafraîchir le widget ${title}`}
+          title="Rafraîchir maintenant"
+        >
+          <span aria-hidden="true">⟳</span>
         </button>
 
         <button
@@ -124,7 +127,7 @@ export function WidgetBlock({
       </header>
 
       {/* The configuration stays visible above the data: two weather widgets
-          look alike, and the city is what tells them apart. */}
+          look alike, and the city is what tells them apart */}
       {paramEntries.length > 0 && (
         <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-slate-500">
           {paramEntries.map(([paramName, paramValue]) => (
@@ -136,16 +139,29 @@ export function WidgetBlock({
       )}
 
       <div className="flex-1 p-3 overflow-auto">
-        {isLoading && !dataState ? (
+        {/* The skeleton only shows before the FIRST answer. A later refresh
+            leaves the data in place: replacing it every cycle would make the
+            dashboard flash. */}
+        {isInitialLoading && !data ? (
           <LoadingState />
         ) : (
-          dataState && <WidgetDataView state={dataState} onRetry={loadData} />
+          data && <WidgetDataView state={data} onRetry={refresh} />
         )}
       </div>
 
       <footer className="flex items-center justify-between gap-2 px-3 pb-2 text-xs text-slate-600">
         <span>Toutes les {widget.refreshRate} s</span>
-        {dataState?.fetchedAt && <span>{formatRelativeTime(dataState.fetchedAt)}</span>}
+        {data?.fetchedAt && (
+          <span
+            // The exact instant on hover: "il y a 5 min" is readable, but
+            // someone diagnosing a stuck widget wants the timestamp
+            title={new Date(data.fetchedAt).toLocaleString("fr-FR")}
+            className={isDataStale ? "text-amber" : undefined}
+          >
+            {isDataStale && <span aria-hidden="true">⚠ </span>}
+            {formatRelativeTime(data.fetchedAt)}
+          </span>
+        )}
       </footer>
     </article>
   );
