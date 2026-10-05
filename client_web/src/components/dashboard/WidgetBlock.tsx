@@ -28,11 +28,10 @@ export function WidgetBlock({
   isEditable = false,
 }: WidgetBlockProps) {
   // A widget type can disappear from the registry (service removed on the
-  // server). The block must still render, so the user can delete it
+  // server)
   const title = widgetType?.name ?? widget.widgetTypeId;
   const serviceName = widgetType?.service ?? "unknown";
   const paramEntries = Object.entries(widget.params);
-
   const { data, isInitialLoading, isRefreshing, clockTick, refresh } = useWidgetData(
     widget.id,
     widget.refreshRate,
@@ -67,7 +66,7 @@ export function WidgetBlock({
               : `Widget ${title}`
           }
         >
-          <span className="block text-xs uppercase tracking-wide text-slate-500">
+          <span className="block text-xs uppercase tracking-wide text-muted">
             {serviceName}
           </span>
           <span className="block text-sm font-semibold text-white truncate">{title}</span>
@@ -112,7 +111,7 @@ export function WidgetBlock({
       {/* The configuration stays visible above the data: two weather widgets
           look alike, and the city is what tells them apart */}
       {paramEntries.length > 0 && (
-        <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-slate-500">
+        <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-muted">
           {paramEntries.map(([paramName, paramValue]) => (
             <span key={paramName}>
               {paramName} <span className="font-mono text-slate-400">{String(paramValue)}</span>
@@ -124,7 +123,7 @@ export function WidgetBlock({
       <div className="flex-1 p-3 overflow-auto">
         {/* The skeleton only shows before the FIRST answer. A later refresh
             leaves the data in place: replacing it every cycle would make the
-            dashboard flash. */}
+            dashboard flash */}
         {isInitialLoading && !data ? (
           <LoadingState />
         ) : (
@@ -132,7 +131,7 @@ export function WidgetBlock({
         )}
       </div>
 
-      <footer className="flex items-center justify-between gap-2 px-3 pb-2 text-xs text-slate-600">
+      <footer className="flex items-center justify-between gap-2 px-3 pb-2 text-xs text-muted">
         <span>Toutes les {widget.refreshRate} s</span>
         {data?.fetchedAt && (
           <span

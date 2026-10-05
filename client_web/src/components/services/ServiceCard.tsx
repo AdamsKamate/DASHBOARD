@@ -3,9 +3,9 @@
 import { Button } from "@/components/ui";
 import type { Service } from "@/lib/types";
 
-// One service, with its linking state.
+// One service, with its linking state
 
-/* Human label and one-line description per service. */
+/* Human label and one-line description per service */
 const SERVICE_LABELS: Record<string, { title: string; description: string }> = {
   weather: {
     title: "Météo",
@@ -36,7 +36,7 @@ function describeService(serviceName: string) {
 
 interface ServiceCardProps {
   service: Service;
-  /* True while a link or unlink request is in flight for this service. */
+  /* True while a link or unlink request is in flight for this service */
   isBusy: boolean;
   onLink: (serviceName: string) => void;
   onUnlink: (serviceName: string) => void;
@@ -50,7 +50,7 @@ export function ServiceCard({ service, isBusy, onLink, onUnlink }: ServiceCardPr
       <header className="flex items-start justify-between gap-4 bg-raised px-4 py-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-white">{title}</h2>
-          <p className="text-xs uppercase tracking-wide text-slate-500">{service.name}</p>
+          <p className="text-xs uppercase tracking-wide text-muted">{service.name}</p>
         </div>
         <StatusBadge service={service} />
       </header>
@@ -69,7 +69,7 @@ export function ServiceCard({ service, isBusy, onLink, onUnlink }: ServiceCardPr
 }
 
 /*
- The state, in words and in colour.
+ The state, in words and in colour
  */
 function StatusBadge({ service }: { service: Service }) {
   if (!service.requiresAuth) {
@@ -95,9 +95,9 @@ function StatusBadge({ service }: { service: Service }) {
 
 function ServiceAction({ service, isBusy, onLink, onUnlink }: ServiceCardProps) {
   // A service without authentication has no action: showing a disabled
-  // button would suggest something is missing.
+  // button would suggest something is missing
   if (!service.requiresAuth) {
-    return <span className="shrink-0 text-xs text-slate-500">Prêt à l&apos;emploi</span>;
+    return <span className="shrink-0 text-xs text-muted">Prêt à l&apos;emploi</span>;
   }
   if (service.subscribed) {
     return (
