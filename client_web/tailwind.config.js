@@ -12,9 +12,12 @@ module.exports = {
         flare: "#F85149",    // errors
         pulse: "#3FB950",    // success
         amber: "#D29922",    // warnings
+        muted: "#9BA7B8",
+        
+        "line-strong": "#57616F",
       },
 
-      // Typography.
+      // Typography
       fontFamily: {
         sans: [
           "system-ui",
