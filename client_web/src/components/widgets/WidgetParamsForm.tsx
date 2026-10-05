@@ -10,21 +10,8 @@ import {
   paramLabel,
 } from "@/lib/widgets/params";
 
-// Kept for the files that still import it from here.
+// Kept for the files that still import it from here
 export { toWidgetParams } from "@/lib/widgets/params";
-
-// Generic, data-driven form: one field per entry in `params`, with no
-// knowledge of which widget it belongs to. Adding a widget type on the
-// backend (new entries in a WidgetDefinition's params) makes its
-// configuration form appear here automatically — no front-end change needed.
-//
-// What each field looks like comes from the param's description:
-//   - `options`     → a select; an optional one starts with its emptyLabel
-//                     ("Tous les états"), which sends an empty value
-//   - `emptyLabel`  → the field is optional, and the hint under it says what
-//                     leaving it empty does ("Laisser vide : tous les labels")
-//   - `label`, `placeholder`, `help`, `min`, `max` → used as is
-// A param with only { name, type } still renders as a required text field.
 
 interface WidgetParamsFormProps {
   params: WidgetTypeParam[];
@@ -34,7 +21,7 @@ interface WidgetParamsFormProps {
   onChange: (name: string, rawValue: string) => void;
   /* Makes ids unique when two forms are on screen, and remounts the fields
      when the widget type changes, so a leftover value from the previous type
-     never leaks into a field that shares a name but means something else. */
+     never leaks into a field that shares a name but means something else */
   idPrefix?: string;
 }
 
