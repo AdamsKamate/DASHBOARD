@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button, FormError, Input } from "@/components/ui";
 import { Modal } from "@/components/Modal";
 import { WidgetParamsForm } from "@/components/widgets/WidgetParamsForm";
+import { presentationFor } from "@/lib/widgets/presentation";
 import { api, ApiError } from "@/lib/api";
 import {
   FieldErrors,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/widgets/refresh";
 import type { Position, Service, WidgetInstance, WidgetType } from "@/lib/types";
 
-// Creating a widget instance (C9), in three steps
+// Creating a widget instance (C9), in three steps.
 
 type Step = "type" | "config" | "refresh";
 
@@ -36,6 +37,14 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 const STEP_ORDER: Step[] = ["type", "config", "refresh"];
+
+/** Service names as a person would write them. */
+const SERVICE_LABELS: Record<string, string> = {
+  weather: "Météo",
+  rss: "Flux RSS",
+  github: "GitHub",
+  google: "Google",
+};
 
 interface AddWidgetModalProps {
   widgetTypes: WidgetType[];
@@ -54,7 +63,8 @@ export function AddWidgetModal({
 }: AddWidgetModalProps) {
   /*
    Only widgets whose service is available: weather and RSS for everyone,
-   GitHub or Google once the account is linked
+   GitHub or Google once the account is linked. Offering the others would
+   only lead to a 403 after filling the form.
    */
   const availableWidgetTypes = useMemo(() => {
     const subscribedServiceNames = new Set(
@@ -73,13 +83,14 @@ export function AddWidgetModal({
     null
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const selectedType = availableWidgetTypes.find((widgetType) => widgetType.id === selectedTypeId);
 
   function chooseType(widgetTypeId: string) {
     const nextType = availableWidgetTypes.find((widgetType) => widgetType.id === widgetTypeId);
     setSelectedTypeId(widgetTypeId);
     // Each type has its own parameters: values typed for the previous one
-    // would not make sense here
+    // would not make sense here.
     setFieldValues(nextType ? createEmptyValues(nextType.params) : {});
     setFieldErrors({});
     setSubmitError(null);
@@ -87,11 +98,10 @@ export function AddWidgetModal({
   }
 
   function goToRefreshStep() {
-    if (!selectedType) {
-        return;
-    }
+    if (!selectedType) return;
+
     // Validated on leaving the step, not on every keystroke: an error shown
-    // while the user is still typing their first letter is noise
+    // while the user is still typing their first letter is noise.
     const validationErrors = validateFieldValues(selectedType.params, fieldValues);
     setFieldErrors(validationErrors);
     if (hasNoError(validationErrors)) {
@@ -100,14 +110,14 @@ export function AddWidgetModal({
   }
 
   async function handleConfirm() {
-    if (!selectedType) {
-        return;
-    }
+    if (!selectedType) return;
+
     const refreshValidationError = validateRefreshRate(refreshRate);
     setRefreshError(refreshValidationError);
     if (refreshValidationError) {
       return;
     }
+
     setSubmitError(null);
     setIsSubmitting(true);
 
@@ -122,7 +132,7 @@ export function AddWidgetModal({
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) {
         // The server validates too, and knows things the front end does not:
-        // that a city exists, that a repository is reachable
+        // that a city exists, that a repository is reachable.
         setSubmitError({
           message: "La configuration contient une erreur :",
           details: error.details,
@@ -223,7 +233,7 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
                     : "rounded-full border border-line px-2 py-0.5 text-muted"
               }
               // The current step is announced, so a screen reader user knows
-              // where they are without counting
+              // where they are without counting.
               aria-current={isCurrent ? "step" : undefined}
             >
               {index + 1}. {STEP_LABELS[step]}
@@ -244,7 +254,7 @@ function TypeStep({
   onChoose: (widgetTypeId: string) => void;
 }) {
   // Grouped by service: on a dashboard with four services and eight widgets,
-  // a flat list makes the user read every entry to find the right one
+  // a flat list makes the user read every entry to find the right one.
   const byService = useMemo(() => {
     const groups = new Map<string, WidgetType[]>();
     for (const widgetType of widgetTypes) {
@@ -259,7 +269,9 @@ function TypeStep({
     <div className="flex flex-col gap-4">
       {byService.map(([serviceName, types]) => (
         <section key={serviceName}>
-          <h3 className="mb-2 text-xs uppercase tracking-wide text-muted">{serviceName}</h3>
+          <h3 className="mb-2 text-xs uppercase tracking-wide text-muted">
+            {SERVICE_LABELS[serviceName] ?? serviceName}
+          </h3>
           <div className="flex flex-col gap-2">
             {types.map((widgetType) => (
               <button
@@ -269,7 +281,10 @@ function TypeStep({
                 className="rounded-md border border-line bg-ink p-3 text-left
                            hover:border-signal focus-visible:border-signal"
               >
-                <p className="text-sm font-medium text-white">{widgetType.name}</p>
+                <p className="flex items-center gap-2 text-sm font-medium text-white">
+                  <span aria-hidden="true">{presentationFor(widgetType.id).icon}</span>
+                  {presentationFor(widgetType.id).title}
+                </p>
                 <p className="text-xs text-slate-400">{widgetType.description}</p>
                 <p className="mt-1 text-xs text-slate-600">
                   {describeParamCount(widgetType)}
@@ -392,13 +407,13 @@ function RefreshStep({
       )}
 
       {/* A summary before confirming: the user reviews what they configured
-          two steps ago without going back */}
+          two steps ago without going back. */}
       <section className="rounded-md border border-line bg-ink p-3">
         <h3 className="mb-2 text-xs uppercase tracking-wide text-muted">Récapitulatif</h3>
         <dl className="flex flex-col gap-1 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Widget</dt>
-            <dd className="text-white">{widgetType.name}</dd>
+            <dd className="text-white">{presentationFor(widgetType.id).title}</dd>
           </div>
           {/* The option label rather than its code ("Ouvertes", not "open"),
               and what an empty field means ("Tous les labels"), so the user

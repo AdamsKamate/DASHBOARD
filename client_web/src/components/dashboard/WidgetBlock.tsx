@@ -2,21 +2,20 @@
 
 import { LoadingState, WidgetDataView } from "@/components/widgets/WidgetDataView";
 import { formatRelativeTime } from "@/lib/widgets/display";
-import { displayValue, paramLabel } from "@/lib/widgets/params";
-import type { WidgetData, WidgetInstance, WidgetType } from "@/lib/types";
 import { useWidgetData } from "@/lib/widgets/useWidgetData";
 import { isStale } from "@/lib/widgets/freshness";
+import { presentationFor, subtitleFrom } from "@/lib/widgets/presentation";
 import type { WidgetInstance, WidgetType } from "@/lib/types";
 
-// One block of the grid
+// One block of the grid.
 
 interface WidgetBlockProps {
   widget: WidgetInstance;
   widgetType: WidgetType | undefined;
   onRemove: (widgetId: string) => void;
-  /* Starts a move. Absent on read-only screens */
+  /* Starts a move. Absent on read-only screens. */
   onDragHandlePointerDown?: (event: React.PointerEvent) => void;
-  /* Arrow keys move the block, Shift + arrows resize it */
+  /* Arrow keys move the block, Shift + arrows resize it. */
   onDragHandleKeyDown?: (event: React.KeyboardEvent) => void;
   isEditable?: boolean;
 }
@@ -30,69 +29,65 @@ export function WidgetBlock({
   isEditable = false,
 }: WidgetBlockProps) {
   // A widget type can disappear from the registry (service removed on the
-  // server)
-  const title = widgetType?.name ?? widget.widgetTypeId;
-  const serviceName = widgetType?.service ?? "unknown";
-  /*
-   Shown with the labels of the widget type when it is known ("État
-   Ouvertes", not "state open"); a filter left empty is skipped unless it
-   says what it means ("Labels Tous les labels" would just be noise, so only
-   set values and meaningful defaults appear).
-   */
-  const paramEntries = Object.entries(widget.params)
-    .map(([paramName, paramValue]): [string, string] => {
-      const param = widgetType?.params.find((candidate) => candidate.name === paramName);
-      if (!param) {
-        return [paramName, String(paramValue)];
-      }
-      const isEmpty = String(paramValue).trim() === "";
-      return [paramLabel(param), isEmpty ? "" : displayValue(param, paramValue)];
-    })
-    .filter(([, shownValue]) => shownValue !== "");
+  // server). The block must still render, so the user can delete it.
+  const presentation = presentationFor(widget.widgetTypeId);
+  const title = presentation.title;
+  const subtitle = subtitleFrom(widget.params);
 
-  const paramEntries = Object.entries(widget.params);
+  // Kept for the accessible label and the tooltip: the technical name is what
+  // appears in API.md and in the logs, so it must stay reachable.
+  const technicalName = widgetType?.name ?? widget.widgetTypeId;
+
   const { data, isInitialLoading, isRefreshing, clockTick, refresh } = useWidgetData(
     widget.id,
     widget.refreshRate,
     widget.params
   );
 
-  // clockTick is read so React redraws the age below; its value is unused
+  // clockTick is read so React redraws the age below; its value is unused.
   void clockTick;
+
   const isDataStale = isStale(data?.fetchedAt ?? null, widget.refreshRate);
 
   return (
     <article
       className="h-full flex flex-col rounded-md border border-line bg-surface overflow-hidden"
-      aria-label={`Widget ${title}`}
+      aria-label={`Widget ${title}${subtitle ? ` ${subtitle}` : ""}`}
     >
       <header className="flex items-stretch justify-between gap-2 bg-raised border-b border-line">
         {/* A button, not a div: it can be reached with Tab, and the arrow keys
             then move the block. Dragging with a mouse and moving with the
-            keyboard use the same handle */}
+            keyboard use the same handle. */}
         <button
           type="button"
           onPointerDown={onDragHandlePointerDown}
           onKeyDown={onDragHandleKeyDown}
           disabled={!isEditable}
-          // touch none tells the browser we handle touch ourselves, otherwise
-          // a drag on a phone scrolls the page instead of moving the block
+          // touch-none tells the browser we handle touch ourselves, otherwise
+          // a drag on a phone scrolls the page instead of moving the block.
           className="flex-1 min-w-0 text-left px-3 py-2 touch-none select-none
                      enabled:cursor-move disabled:cursor-default"
           aria-label={
             isEditable
-              ? `Déplacer le widget ${title}. Flèches pour déplacer, Maj + flèches pour redimensionner.`
+              ? `Déplacer le widget ${title}${subtitle ? ` ${subtitle}` : ""}. Flèches pour déplacer, Maj + flèches pour redimensionner.`
               : `Widget ${title}`
           }
         >
-          <span className="block text-xs uppercase tracking-wide text-muted">
-            {serviceName}
+          <span className="flex items-center gap-2">
+            <span aria-hidden="true">{presentation.icon}</span>
+            <span className="text-sm font-semibold text-white truncate">{title}</span>
           </span>
-          <span className="block text-sm font-semibold text-white truncate">{title}</span>
+          {/* The configuration, not the service name: two weather widgets are
+              told apart by their city, never by the word "weather". */}
+          {subtitle && (
+            <span className="block truncate text-xs text-muted" title={technicalName}>
+              {subtitle}
+            </span>
+          )}
         </button>
 
         {/* Shown only during a background refresh: the content stays on
-            screen, and this says why it is about to change */}
+            screen, and this says why it is about to change. */}
         {isRefreshing && (
           <span
             role="status"
@@ -127,26 +122,14 @@ export function WidgetBlock({
         </button>
       </header>
 
-      {/* The configuration stays visible above the data: two weather widgets
-          look alike, and the city is what tells them apart */}
-      {paramEntries.length > 0 && (
-        <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-muted">
-          {paramEntries.map(([paramName, paramValue]) => (
-            <span key={paramName}>
-              {paramName} <span className="text-slate-400">{paramValue}</span>
-            </span>
-          ))}
-        </p>
-      )}
-
       <div className="flex-1 p-3 overflow-auto">
         {/* The skeleton only shows before the FIRST answer. A later refresh
             leaves the data in place: replacing it every cycle would make the
-            dashboard flash */}
+            dashboard flash. */}
         {isInitialLoading && !data ? (
           <LoadingState />
         ) : (
-          data && <WidgetDataView state={data} onRetry={refresh} />
+          data && <WidgetDataView state={data} onRetry={refresh} presentation={presentation} />
         )}
       </div>
 
@@ -155,7 +138,7 @@ export function WidgetBlock({
         {data?.fetchedAt && (
           <span
             // The exact instant on hover: "il y a 5 min" is readable, but
-            // someone diagnosing a stuck widget wants the timestamp
+            // someone diagnosing a stuck widget wants the timestamp.
             title={new Date(data.fetchedAt).toLocaleString("fr-FR")}
             className={isDataStale ? "text-amber" : undefined}
           >

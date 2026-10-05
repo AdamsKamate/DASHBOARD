@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { WidgetData } from "@/lib/types";
 import { classifyWidgetError, errorStyleFor } from "@/lib/widgets/errors";
+import type { WidgetPresentation } from "@/lib/widgets/presentation";
 import {
   displayableKeys,
   formatDate,
@@ -16,14 +17,16 @@ import {
   unitFor,
 } from "@/lib/widgets/display";
 
-// Rendering the data of a widget, whatever its type
+// Rendering the data of a widget, whatever its type.
 
 interface WidgetDataViewProps {
   state: WidgetData;
   onRetry?: () => void;
+  /** Which field to show large, when the widget type declares one. */
+  presentation?: WidgetPresentation;
 }
 
-export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
+export function WidgetDataView({ state, onRetry, presentation }: WidgetDataViewProps) {
   if (state.status === "error") {
     return (
       <div className="flex flex-col gap-3">
@@ -31,7 +34,7 @@ export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
 
         {/* The last known values stay below the message when the server kept
             them. A temperature from ten minutes ago, clearly labelled as
-            such, is more useful than an empty block */}
+            such, is more useful than an empty block. */}
         {state.data && (
           <div className="opacity-60">
             <p className="mb-1 text-xs text-muted">Dernières données connues</p>
@@ -43,11 +46,68 @@ export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
   }
 
   // "pending" means the worker has not fetched anything yet: the widget was
-  // just added, or its configuration changed. It is not an error
+  // just added, or its configuration changed. It is not an error.
   if (state.status === "pending" || !state.data) {
     return <PendingState />;
   }
+
+  const headline = presentation?.headline;
+  const headlineValue = headline ? state.data[headline.valueKey] : undefined;
+
+  // The headline only appears when the field is actually there: a widget
+  // whose API changed shape falls back on the plain list rather than showing
+  // an empty hero.
+  if (headline && (typeof headlineValue === "number" || typeof headlineValue === "string")) {
+    return (
+      <div className="flex flex-col gap-3">
+        <HeadlineView
+          value={headlineValue}
+          unit={headline.unitKey ? String(state.data[headline.unitKey] ?? "") : null}
+          caption={headline.captionKey ? state.data[headline.captionKey] : null}
+        />
+        <RecordView record={state.data} skipKeys={headlineKeysOf(headline)} />
+      </div>
+    );
+  }
+
   return <RecordView record={state.data} />;
+}
+
+/** Which keys the headline already shows, so the list does not repeat them. */
+function headlineKeysOf(headline: NonNullable<WidgetPresentation["headline"]>): string[] {
+  return [headline.valueKey, headline.unitKey, headline.captionKey].filter(
+    (key): key is string => typeof key === "string"
+  );
+}
+
+/**
+ * The one number that matters, large.
+ *
+ * A dashboard is glanced at, not read: a temperature at 2.5rem is legible
+ * from across a room, where the same figure in a key/value row is not.
+ */
+function HeadlineView({
+  value,
+  unit,
+  caption,
+}: {
+  value: string | number;
+  unit: string | null;
+  caption: unknown;
+}) {
+  return (
+    <div>
+      <p className="flex items-baseline gap-1">
+        <span className="text-4xl font-semibold leading-none text-white">
+          {formatScalar(value)}
+        </span>
+        {unit && <span className="text-lg text-muted">{unit}</span>}
+      </p>
+      {typeof caption === "string" && caption !== "" && (
+        <p className="mt-1 text-sm text-muted">{caption}</p>
+      )}
+    </div>
+  );
 }
 
 /* Shown while the first request is in flight. */
@@ -77,7 +137,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
     <div
       // A framed, tinted block rather than a line of red text: on a grid of
       // twelve widgets, a failure has to be visible at a glance, without
-      // reading
+      // reading.
       className={`flex flex-col gap-2 rounded-md border p-3 ${style.border} ${style.background}`}
     >
       <div className="flex items-start gap-2">
@@ -85,7 +145,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           {style.icon}
         </span>
         {/* role="alert" so a screen reader announces the failure instead of
-            leaving the user with a silently empty widget */}
+            leaving the user with a silently empty widget. */}
         <p role="alert" className={`text-sm ${style.text}`}>
           {message ?? "Les données n'ont pas pu être récupérées."}
         </p>
@@ -103,7 +163,9 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           </Link>
         )}
 
-        {/* Offered only when retrying could plausibly work */}
+        {/* Offered only when retrying could plausibly work. A button that
+            cannot change the outcome — a city that does not exist, an expired
+            authorisation — only invites the user to click in vain. */}
         {presentation.canRetry && onRetry && (
           <button
             type="button"
@@ -118,9 +180,15 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
   );
 }
 
-/* A record: one line per key, nested blocks for anything deeper */
-function RecordView({ record }: { record: Record<string, unknown> }) {
-  const keys = displayableKeys(record);
+/* A record: one line per key, nested blocks for anything deeper. */
+function RecordView({
+  record,
+  skipKeys = [],
+}: {
+  record: Record<string, unknown>;
+  skipKeys?: string[];
+}) {
+  const keys = displayableKeys(record).filter((key) => !skipKeys.includes(key));
   if (keys.length === 0) {
     return <p className="text-sm text-muted">Aucune donnée à afficher.</p>;
   }
@@ -191,7 +259,7 @@ function ValueView({
   }
 }
 
-/* One row of a list: a headline, then its other fields */
+/** One row of a list: a headline, then its other fields. */
 function RowView({ row }: { row: Record<string, unknown> }) {
   const headlineKey = headlineKeyOf(row);
   const otherKeys = displayableKeys(row).filter((key) => key !== headlineKey);
