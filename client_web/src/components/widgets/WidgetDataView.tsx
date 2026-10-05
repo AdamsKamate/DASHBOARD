@@ -16,7 +16,7 @@ import {
   unitFor,
 } from "@/lib/widgets/display";
 
-// Rendering the data of a widget, whatever its type.
+// Rendering the data of a widget, whatever its type
 
 interface WidgetDataViewProps {
   state: WidgetData;
@@ -31,10 +31,10 @@ export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
 
         {/* The last known values stay below the message when the server kept
             them. A temperature from ten minutes ago, clearly labelled as
-            such, is more useful than an empty block. */}
+            such, is more useful than an empty block */}
         {state.data && (
           <div className="opacity-60">
-            <p className="mb-1 text-xs text-slate-500">Dernières données connues</p>
+            <p className="mb-1 text-xs text-muted">Dernières données connues</p>
             <RecordView record={state.data} />
           </div>
         )}
@@ -43,11 +43,10 @@ export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
   }
 
   // "pending" means the worker has not fetched anything yet: the widget was
-  // just added, or its configuration changed. It is not an error.
+  // just added, or its configuration changed. It is not an error
   if (state.status === "pending" || !state.data) {
     return <PendingState />;
   }
-
   return <RecordView record={state.data} />;
 }
 
@@ -64,7 +63,7 @@ export function LoadingState() {
 
 function PendingState() {
   return (
-    <p className="text-sm text-slate-500">
+    <p className="text-sm text-muted">
       Données en attente du premier rafraîchissement.
     </p>
   );
@@ -78,7 +77,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
     <div
       // A framed, tinted block rather than a line of red text: on a grid of
       // twelve widgets, a failure has to be visible at a glance, without
-      // reading.
+      // reading
       className={`flex flex-col gap-2 rounded-md border p-3 ${style.border} ${style.background}`}
     >
       <div className="flex items-start gap-2">
@@ -86,7 +85,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           {style.icon}
         </span>
         {/* role="alert" so a screen reader announces the failure instead of
-            leaving the user with a silently empty widget. */}
+            leaving the user with a silently empty widget */}
         <p role="alert" className={`text-sm ${style.text}`}>
           {message ?? "Les données n'ont pas pu être récupérées."}
         </p>
@@ -104,9 +103,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           </Link>
         )}
 
-        {/* Offered only when retrying could plausibly work. A button that
-            cannot change the outcome — a city that does not exist, an expired
-            authorisation — only invites the user to click in vain. */}
+        {/* Offered only when retrying could plausibly work */}
         {presentation.canRetry && onRetry && (
           <button
             type="button"
@@ -121,11 +118,11 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
   );
 }
 
-/* A record: one line per key, nested blocks for anything deeper. */
+/* A record: one line per key, nested blocks for anything deeper */
 function RecordView({ record }: { record: Record<string, unknown> }) {
   const keys = displayableKeys(record);
   if (keys.length === 0) {
-    return <p className="text-sm text-slate-500">Aucune donnée à afficher.</p>;
+    return <p className="text-sm text-muted">Aucune donnée à afficher.</p>;
   }
   return (
     <dl className="flex flex-col gap-2">
@@ -149,7 +146,7 @@ function ValueView({
     case "rows":
       return (
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
           <dd className="mt-1 flex flex-col gap-2">
             {(value as Record<string, unknown>[]).map((row, index) => (
               <RowView key={index} row={row} />
@@ -161,7 +158,7 @@ function ValueView({
     case "list":
       return (
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
           <dd className="mt-1 flex flex-wrap gap-1">
             {(value as unknown[]).map((item, index) => (
               <span key={index} className="rounded bg-raised px-2 py-0.5 text-xs text-white">
@@ -175,7 +172,7 @@ function ValueView({
     case "record":
       return (
         <div className="rounded border border-line p-2">
-          <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+          <dt className="text-xs uppercase tracking-wide text-muted">{label}</dt>
           <dd className="mt-1">
             <RecordView record={value as Record<string, unknown>} />
           </dd>
@@ -185,7 +182,7 @@ function ValueView({
     default:
       return (
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="shrink-0 text-xs text-slate-500">{label}</dt>
+          <dt className="shrink-0 text-xs text-muted">{label}</dt>
           <dd className="min-w-0 text-right text-sm text-white">
             <ScalarView value={value} unit={unit} />
           </dd>
@@ -194,7 +191,7 @@ function ValueView({
   }
 }
 
-/** One row of a list: a headline, then its other fields. */
+/* One row of a list: a headline, then its other fields */
 function RowView({ row }: { row: Record<string, unknown> }) {
   const headlineKey = headlineKeyOf(row);
   const otherKeys = displayableKeys(row).filter((key) => key !== headlineKey);
@@ -210,7 +207,7 @@ function RowView({ row }: { row: Record<string, unknown> }) {
         <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-400">
           {otherKeys.map((key) => (
             <span key={key}>
-              <span className="text-slate-500">{labelFor(key)} </span>
+              <span className="text-muted">{labelFor(key)} </span>
               <ScalarView value={row[key]} unit={unitFor(row, key)} />
             </span>
           ))}

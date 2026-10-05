@@ -3,11 +3,12 @@ import { fetchJson, ExternalApiError } from "../lib/httpClient";
 
 // GitHub service: commits, issues, pull requests, releases and statistics of
 // a repository, behind a single OAuth link.
+// GitHub service: commits and issues of a repository behind a single OAuth link
 const GITHUB_API = "https://api.github.com";
 
 /*
  The permissions asked of the user. "repo" is needed to read private
- repositories as well; "read:user" identifies the account.
+ repositories as well; "read:user" identifies the account
  */
 const SCOPES = ["read:user", "repo"].join(" ");
 
@@ -37,7 +38,7 @@ function githubHeaders(token: string): Record<string, string> {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    // GitHub rejects requests without a User-Agent
+    // GitHub rejects requests without a User Agent
     "User-Agent": "epitech-dashboard",
   };
 }
@@ -153,14 +154,13 @@ function readCountParam(params: Params): number {
 }
 
 /*
- "owner/name", as shown in the repository URL. Each part is checked against
- the characters GitHub allows, so nothing else can slip into the API path.
+ "owner/name", as shown in the repository URL
  */
 function readRepoParam(params: Params): { owner: string; name: string } {
   /*
    Users naturally paste the repository URL: "https://github.com/owner/name",
    "github.com/owner/name/tree/main", "git@github.com:owner/name.git"...
-   Everything around "owner/name" is stripped before checking it.
+   Everything around "owner/name" is stripped before checking it
    */
   const repo = String(params.repo ?? "")
     .trim()
@@ -290,9 +290,7 @@ const commits: WidgetDefinition = {
     const headers = githubHeaders(requireToken(token));
 
     /*
-     An empty branch means the repository's default branch. Asking for it
-     explicitly (rather than omitting `sha`) lets the widget display which
-     branch it is showing.
+     An empty branch means the repository's default branch
      */
     let branch = readOptionalString(params, "branch");
     if (!branch) {
@@ -313,6 +311,11 @@ const commits: WidgetDefinition = {
       headers,
     });
 
+    /*
+     Shaped for the generic WidgetDataView: each commit is a row whose
+     headline is "message", the other fields are shown under it, and "url"
+     becomes an "Ouvrir" link. No avatar URL: it would render as a second link
+     */
     return {
       repo: repoLabel(repo),
       branch,
@@ -389,11 +392,17 @@ const issues: WidgetDefinition = {
     const assignee = readLoginParam(params, "assignee");
     const sort = readChoice(params, ISSUES_SORT_PARAM, "updated");
     const count = readCountParam(params);
+    const accessToken = requireToken(token);
+
+    // "bug, urgent" "bug,urgent": GitHub keeps issues carrying ALL the labels
+    const labels = (readOptionalString(params, "labels") ?? "")
+      .split(",")
+      .map((label) => label.trim())
+      .filter((label) => label.length > 0)
+      .join(",");
 
     /*
-     The issues endpoint also returns pull requests. Asking for three times
-     as many items leaves enough real issues after filtering them out in a
-     repository with many PRs, without paginating.
+     The issues endpoint also returns pull requests
      */
     const query = new URLSearchParams({
       state,
@@ -414,6 +423,10 @@ const issues: WidgetDefinition = {
 
     const realIssues = response.filter((item) => !item.pull_request).slice(0, count);
 
+    /*
+     Shaped for the generic WidgetDataView: each issue is a row whose
+     headline is "title".
+     */
     return {
       repo: repoLabel(repo),
       issues: realIssues.map((item) => ({

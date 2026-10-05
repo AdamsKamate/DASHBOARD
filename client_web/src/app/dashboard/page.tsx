@@ -17,7 +17,7 @@ import {
 } from "@/lib/dashboard/layout";
 import type { Service, WidgetInstance, WidgetType } from "@/lib/types";
 
-// Dashboard page: the widget grid (C10).
+// Dashboard page: the widget grid (C10)
 type LoadingState = "loading" | "ready" | "failed";
 
 function isNotImplementedYet(error: unknown): boolean {
@@ -38,7 +38,7 @@ function DashboardContent() {
     setLoadingState("loading");
     try {
       // The three requests are independent: sent together, not one after
-      // the other.
+      // the other
       const [loadedWidgets, loadedWidgetTypes, loadedServices] = await Promise.all([
         api.widgets.list(),
         api.widgetTypes.list(),
@@ -58,19 +58,17 @@ function DashboardContent() {
       setLoadingState("failed");
     }
   }, []);
-
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
-
   async function handleLayoutCommitted(layout: GridItem[]) {
     const changes = findChangedPositions(widgets, layout);
-    if (changes.length === 0) return;
-
+    if (changes.length === 0) {
+      return;
+    }
     const previousWidgets = widgets;
     setWidgets(applyPositionChanges(widgets, changes));
     setActionError(null);
-
     try {
       await Promise.all(
         changes.map((change) =>
@@ -84,9 +82,10 @@ function DashboardContent() {
   }
 
   async function handleRemove(widgetId: string) {
-    // A deletion cannot be undone: ask first.
-    if (!window.confirm("Supprimer ce widget ?")) return;
-
+    // A deletion cannot be undone: ask first
+    if (!window.confirm("Supprimer ce widget ?")) {
+      return;
+    }
     const previousWidgets = widgets;
     setWidgets(widgets.filter((widget) => widget.id !== widgetId));
     setActionError(null);
@@ -110,12 +109,12 @@ function DashboardContent() {
   }
 
   return (
-    <main className="min-h-screen bg-ink">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
+    <main id="main-content" className="min-h-screen bg-ink">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-white">Dashboard</h1>
           {/* Which backend the front end is talking to. Development aid:
-              remove it, or hide it behind NODE_ENV, before the final build. */}
+              remove it, or hide it behind NODE_ENV, before the final build */}
           <span
             className="text-xs px-2 py-0.5 rounded border border-line text-slate-400"
             title={
@@ -127,11 +126,11 @@ function DashboardContent() {
             {USE_MOCK ? "mock" : "serveur réel"}
           </span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <Link href="/services">
             <Button variant="secondary">Services</Button>
           </Link>
-          <span className="text-sm text-slate-400">{user?.email}</span>
+          <span className="hidden text-sm text-slate-400 sm:inline">{user?.email}</span>
           <Button variant="secondary" onClick={handleLogout}>
             Se déconnecter
           </Button>

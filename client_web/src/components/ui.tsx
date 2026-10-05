@@ -22,7 +22,7 @@ export function Button({
   return (
     <button
       // disabled:cursor not allowed matters: without it a disabled button
-      // still shows the pointer cursor and looks clickable.
+      // still shows the pointer cursor and looks clickable
       className={`h-10 px-4 rounded-md font-medium transition
                   disabled:opacity-50 disabled:cursor-not-allowed
                   ${BUTTON_STYLES[variant]} ${className}`}
@@ -58,11 +58,11 @@ export function Input({
       <input
         id={inputId}
         // aria-invalid and aria-describedby link the field to its message:
-        // a screen reader then reads the error when focus enters the field.
+        // a screen reader then reads the error when focus enters the field
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className={`h-10 px-3 rounded-md bg-surface border text-white outline-none
-                    focus:border-signal ${error ? "border-flare" : "border-line"}`}
+                    focus:border-signal ${error ? "border-flare" : "border-line-strong"}`}
         {...inputProps}
       />
       {error && (
@@ -93,7 +93,7 @@ export function Card({
 
 /*
  Form level error: what went wrong, plus the list of validation problems
- returned by the API in `details`.
+ returned by the API in `details`
  */
 export function FormError({ message, details }: { message: string; details?: string[] }) {
   return (
@@ -110,7 +110,7 @@ export function FormError({ message, details }: { message: string; details?: str
   );
 }
 
-/* Success message, same reading behaviour as FormError. */
+/* Success message, same reading behaviour as FormError */
 export function FormSuccess({ children }: { children: React.ReactNode }) {
   return (
     <p role="status" className="text-pulse text-sm">
