@@ -9,8 +9,10 @@ import {
   FieldErrors,
   FieldValues,
   createEmptyValues,
+  displayValue,
   hasNoError,
-  labelFor,
+  isParamRequired,
+  paramLabel,
   toWidgetParams,
   validateFieldValues,
 } from "@/lib/widgets/params";
@@ -271,8 +273,7 @@ function TypeStep({
                 <p className="text-sm font-medium text-white">{widgetType.name}</p>
                 <p className="text-xs text-slate-400">{widgetType.description}</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  {widgetType.params.length} paramètre
-                  {widgetType.params.length > 1 ? "s" : ""} à configurer
+                  {describeParamCount(widgetType)}
                 </p>
               </button>
             ))}
@@ -281,6 +282,27 @@ function TypeStep({
       ))}
     </div>
   );
+}
+
+/*
+ "1 champ obligatoire, 4 facultatifs": tells the user how much they really
+ have to fill in before they open the form.
+ */
+function describeParamCount(widgetType: WidgetType): string {
+  const requiredCount = widgetType.params.filter(isParamRequired).length;
+  const optionalCount = widgetType.params.length - requiredCount;
+
+  if (widgetType.params.length === 0) {
+    return "Rien à configurer";
+  }
+  const parts: string[] = [];
+  if (requiredCount > 0) {
+    parts.push(`${requiredCount} champ${requiredCount > 1 ? "s" : ""} obligatoire${requiredCount > 1 ? "s" : ""}`);
+  }
+  if (optionalCount > 0) {
+    parts.push(`${optionalCount} facultatif${optionalCount > 1 ? "s" : ""}`);
+  }
+  return parts.join(", ");
 }
 
 function ConfigStep({
@@ -376,12 +398,21 @@ function RefreshStep({
             <dt className="text-slate-500">Widget</dt>
             <dd className="text-white">{widgetType.name}</dd>
           </div>
-          {widgetType.params.map((param) => (
-            <div key={param.name} className="flex justify-between gap-3">
-              <dt className="text-slate-500">{labelFor(param.name)}</dt>
-              <dd className="truncate font-mono text-white">{values[param.name]}</dd>
-            </div>
-          ))}
+          {/* The option label rather than its code ("Ouvertes", not "open"),
+              and what an empty field means ("Tous les labels"), so the user
+              sees the filter they set, not a blank. */}
+          {widgetType.params.map((param) => {
+            const shownValue = displayValue(param, values[param.name]);
+            if (shownValue === "") {
+              return null;
+            }
+            return (
+              <div key={param.name} className="flex justify-between gap-3">
+                <dt className="text-slate-500">{paramLabel(param)}</dt>
+                <dd className="truncate text-white">{shownValue}</dd>
+              </div>
+            );
+          })}
         </dl>
       </section>
     </div>
