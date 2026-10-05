@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import type { WidgetData } from "@/lib/types";
+import { classifyWidgetError, errorStyleFor } from "@/lib/widgets/errors";
 import {
   displayableKeys,
   formatDate,
@@ -23,7 +25,21 @@ interface WidgetDataViewProps {
 
 export function WidgetDataView({ state, onRetry }: WidgetDataViewProps) {
   if (state.status === "error") {
-    return <ErrorState message={state.error} onRetry={onRetry} />;
+    return (
+      <div className="flex flex-col gap-3">
+        <ErrorState message={state.error} onRetry={onRetry} />
+
+        {/* The last known values stay below the message when the server kept
+            them. A temperature from ten minutes ago, clearly labelled as
+            such, is more useful than an empty block. */}
+        {state.data && (
+          <div className="opacity-60">
+            <p className="mb-1 text-xs text-slate-500">Dernières données connues</p>
+            <RecordView record={state.data} />
+          </div>
+        )}
+      </div>
+    );
   }
 
   // "pending" means the worker has not fetched anything yet: the widget was
@@ -55,22 +71,52 @@ function PendingState() {
 }
 
 function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
+  const presentation = classifyWidgetError(message);
+  const style = errorStyleFor(presentation.kind);
+
   return (
-    <div className="flex flex-col items-start gap-2">
-      {/* role="alert" so a screen reader announces the failure instead of
-          leaving the user with a silently empty widget. */}
-      <p role="alert" className="text-sm text-flare">
-        {message ?? "Les données n'ont pas pu être récupérées."}
-      </p>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="widget-no-drag text-xs text-signal hover:underline"
-        >
-          Réessayer
-        </button>
-      )}
+    <div
+      // A framed, tinted block rather than a line of red text: on a grid of
+      // twelve widgets, a failure has to be visible at a glance, without
+      // reading.
+      className={`flex flex-col gap-2 rounded-md border p-3 ${style.border} ${style.background}`}
+    >
+      <div className="flex items-start gap-2">
+        <span aria-hidden="true" className="shrink-0">
+          {style.icon}
+        </span>
+        {/* role="alert" so a screen reader announces the failure instead of
+            leaving the user with a silently empty widget. */}
+        <p role="alert" className={`text-sm ${style.text}`}>
+          {message ?? "Les données n'ont pas pu être récupérées."}
+        </p>
+      </div>
+
+      {presentation.hint && <p className="text-xs text-slate-400">{presentation.hint}</p>}
+
+      <div className="flex items-center gap-3">
+        {presentation.action && (
+          <Link
+            href={presentation.action.href}
+            className="widget-no-drag text-xs text-signal hover:underline"
+          >
+            {presentation.action.label}
+          </Link>
+        )}
+
+        {/* Offered only when retrying could plausibly work. A button that
+            cannot change the outcome — a city that does not exist, an expired
+            authorisation — only invites the user to click in vain. */}
+        {presentation.canRetry && onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="widget-no-drag text-xs text-signal hover:underline"
+          >
+            Réessayer
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -174,7 +220,7 @@ function RowView({ row }: { row: Record<string, unknown> }) {
   );
 }
 
-/* A single value: link, date, or plain text. */
+/* A single value: link, date, or plain text */
 function ScalarView({ value, unit }: { value: unknown; unit: string | null }) {
   if (looksLikeUrl(value)) {
     return (
@@ -183,7 +229,7 @@ function ScalarView({ value, unit }: { value: unknown; unit: string | null }) {
         target="_blank"
         rel="noopener noreferrer"
         // noopener matters: without it, the opened page can reach back into
-        // ours through window.opener.
+        // ours through window.opener
         className="widget-no-drag text-signal hover:underline"
       >
         Ouvrir
