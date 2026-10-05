@@ -5,12 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import { loginPathFor, safeRedirectPath } from "./redirect";
 
-// Route guards.
+// Route guards
 
-/*  Shown while the session is being checked, to avoid a flash of content. */
+/*  Shown while the session is being checked, to avoid a flash of content */
 function SessionCheckPlaceholder() {
   return (
-    <div role="status" aria-live="polite" className="p-8 text-slate-500">
+    <div role="status" aria-live="polite" className="p-8 text-muted">
       Checking your session...
     </div>
   );
@@ -50,7 +50,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
 }
 
 /*
- For the login and registration pages.
+ For the login and registration pages
  */
 export function GuestOnly({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
