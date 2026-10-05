@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { LoadingState, WidgetDataView } from "@/components/widgets/WidgetDataView";
 import { formatRelativeTime } from "@/lib/widgets/display";
+import { displayValue, paramLabel } from "@/lib/widgets/params";
 import type { WidgetData, WidgetInstance, WidgetType } from "@/lib/types";
 
 // One block of the grid.
@@ -31,7 +32,22 @@ export function WidgetBlock({
   // server). The block must still render, so the user can delete it.
   const title = widgetType?.name ?? widget.widgetTypeId;
   const serviceName = widgetType?.service ?? "unknown";
-  const paramEntries = Object.entries(widget.params);
+  /*
+   Shown with the labels of the widget type when it is known ("État
+   Ouvertes", not "state open"); a filter left empty is skipped unless it
+   says what it means ("Labels Tous les labels" would just be noise, so only
+   set values and meaningful defaults appear).
+   */
+  const paramEntries = Object.entries(widget.params)
+    .map(([paramName, paramValue]): [string, string] => {
+      const param = widgetType?.params.find((candidate) => candidate.name === paramName);
+      if (!param) {
+        return [paramName, String(paramValue)];
+      }
+      const isEmpty = String(paramValue).trim() === "";
+      return [paramLabel(param), isEmpty ? "" : displayValue(param, paramValue)];
+    })
+    .filter(([, shownValue]) => shownValue !== "");
 
   const [dataState, setDataState] = useState<WidgetData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,7 +129,7 @@ export function WidgetBlock({
         <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-slate-500">
           {paramEntries.map(([paramName, paramValue]) => (
             <span key={paramName}>
-              {paramName} <span className="font-mono text-slate-400">{String(paramValue)}</span>
+              {paramName} <span className="text-slate-400">{paramValue}</span>
             </span>
           ))}
         </p>
