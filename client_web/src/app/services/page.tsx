@@ -9,7 +9,7 @@ import { RequireAuth } from "@/lib/auth/guards";
 import type { Service } from "@/lib/types";
 
 // Services page: shows OAuth linking state and starts/ends the flow handled
-// by server/src/routes/oauth.ts (C5, C6, C13).
+// by server/src/routes/oauth.ts (C5, C6, C13)
 
 const ERROR_MESSAGES: Record<string, string> = {
   unknown_service: "Service inconnu.",
@@ -22,7 +22,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 type LoadingState = "loading" | "ready" | "failed";
-
 function ServicesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,12 +49,13 @@ function ServicesContent() {
   }, [loadServices]);
 
   // Reads the OAuth callback's result once, then strips it from the URL so a
-  // refresh does not replay the same banner.
+  // refresh does not replay the same banner
   useEffect(() => {
     const linked = searchParams.get("linked");
     const error = searchParams.get("error");
-    if (!linked && !error) return;
-
+    if (!linked && !error) {
+      return
+    };
     if (linked) {
       setBanner({ type: "success", message: `Service "${linked}" lié avec succès.` });
       setServices((previous) =>
@@ -75,7 +75,7 @@ function ServicesContent() {
   async function handleLink(serviceName: string) {
     setActionError(null);
     try {
-      // Navigates away to the provider: nothing local to update here.
+      // Navigates away to the provider: nothing local to update here
       await api.services.link(serviceName);
     } catch {
       setActionError("Impossible de démarrer la liaison avec ce service.");
@@ -83,8 +83,9 @@ function ServicesContent() {
   }
 
   async function handleUnlink(serviceName: string) {
-    if (!window.confirm(`Délier le service "${serviceName}" ?`)) return;
-
+    if (!window.confirm(`Délier le service "${serviceName}" ?`)) {
+      return;
+    }
     setPendingService(serviceName);
     setActionError(null);
     const previousServices = services;
@@ -104,12 +105,12 @@ function ServicesContent() {
   }
 
   return (
-    <main className="min-h-screen bg-ink">
-      <header className="flex items-center justify-between gap-4 border-b border-line px-6 py-4">
+    <main id="main-content" className="min-h-screen bg-ink">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-white">Services</h1>
           <Link href="/dashboard" className="text-sm text-slate-400 hover:text-white">
-            ← Retour au dashboard
+            Retour au dashboard
           </Link>
         </div>
       </header>

@@ -14,22 +14,22 @@ import {
 } from "@/lib/dashboard/layout";
 import { WidgetBlock } from "./WidgetBlock";
 
-// The widget grid, written by hand.
+// The widget grid, written by hand
 
-/* Below this width the grid becomes a real only stack. */
+/* Below this width the grid becomes a real only stack */
 const EDITABLE_MIN_WIDTH_PX = 1024;
 
 const ROW_HEIGHT_PX = 90;
 const GAP_PX = 16;
 
-/* What is currently being dragged or resized. */
+/* What is currently being dragged or resized */
 interface Gesture {
   kind: "move" | "resize";
   itemId: string;
-  /* Pointer position when the gesture started. */
+  /* Pointer position when the gesture started */
   startClientX: number;
   startClientY: number;
-  /* Grid position of the block when the gesture started. */
+  /* Grid position of the block when the gesture started */
   startItem: GridItem;
 }
 
@@ -50,8 +50,7 @@ export function WidgetGrid({
   const [containerWidth, setContainerWidth] = useState(0);
 
   /*
-   The layout being manipulated. It starts from the widgets and follows the
-   pointer during a gesture, so the user sees the result before it is saved.
+   The layout being manipulated
    */
   const [draftLayout, setDraftLayout] = useState<GridItem[] | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
@@ -63,9 +62,7 @@ export function WidgetGrid({
   );
 
   /*
-   The container width decides how wide a column is. ResizeObserver reacts to
-   a window resize and to a sidebar opening, which a window listener would
-   miss.
+   The container width decides how wide a column is
    */
   useEffect(() => {
     const container = containerRef.current;
@@ -79,18 +76,15 @@ export function WidgetGrid({
   }, []);
 
   /*
-   Editing is limited to wide screens. On a phone the grid is a single column:
-   saving a position computed there would scramble the desktop layout the next
-   time it is opened.
+   Editing is limited to wide screens.
    */
   const isEditable = containerWidth >= EDITABLE_MIN_WIDTH_PX;
-
   const columnWidth =
     containerWidth > 0
       ? (containerWidth - GAP_PX * (GRID_COLUMNS - 1)) / GRID_COLUMNS
       : 0;
 
-  /* Grid cell -> pixels. */
+  /* Grid cell -> pixels */
   const toPixels = useCallback(
     (item: GridItem) => ({
       left: item.x * (columnWidth + GAP_PX),
@@ -101,7 +95,7 @@ export function WidgetGrid({
     [columnWidth]
   );
 
-  /* Pixel distance -> number of cells, rounded to the nearest cell. */
+  /* Pixel distance -> number of cells, rounded to the nearest cell */
   const toCells = useCallback(
     (deltaX: number, deltaY: number) => ({
       columns: Math.round(deltaX / (columnWidth + GAP_PX)),
@@ -125,10 +119,10 @@ export function WidgetGrid({
       return;
     }
     // Capturing the pointer keeps the events coming to this element even when
-    // the cursor leaves it otherwise a fast drag would silently stop.
+    // the cursor leaves it otherwise a fast drag would silently stop
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 
-    // Stops the browser from selecting text or scrolling the page instead.
+    // Stops the browser from selecting text or scrolling the page instead
     event.preventDefault();
     setGesture({
       kind,
@@ -168,7 +162,7 @@ export function WidgetGrid({
 
   /*
    Saved when the gesture ends, never during it: a save on every pointer move
-   would send dozens of requests per drag.
+   would send dozens of requests per drag
    */
   function endGesture() {
     if (!gesture) return;
@@ -214,10 +208,22 @@ export function WidgetGrid({
 
   // Rendering
 
-  // On a narrow screen the blocks are simply stacked, in reading order.
+  // On a narrow screen the blocks are simply stacked, in reading order
   if (containerWidth > 0 && !isEditable) {
     return (
       <div ref={containerRef} className="flex flex-col gap-4">
+        {/*
+          On a narrow screen the grid is a single column and read-only: the
+          stored positions describe a twelve column layout, and saving one
+          computed here would scramble the desktop arrangement
+          Said out loud rather than left to be guessed: a user who cannot drag
+          a widget on their phone should know it is deliberate
+        */}
+        <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-muted">
+          Les widgets sont empilés et non modifiables sur petit écran. Passe sur
+          un écran plus large pour les déplacer ou les redimensionner.
+        </p>
+
         {compactVertically(layout).map((item) => {
           const widget = widgets.find((candidate) => candidate.id === item.i);
           if (!widget) {
@@ -243,13 +249,17 @@ export function WidgetGrid({
   return (
     <div
       ref={containerRef}
+      // Named region: a screen reader user hears "grille des widgets" instead
+      // of landing in an unlabelled block of twelve articles
+      role="region"
+      aria-label="Grille des widgets"
       className="relative w-full"
       style={{ height: gridHeight || undefined }}
       onPointerMove={continueGesture}
       onPointerUp={endGesture}
       onPointerCancel={endGesture}
     >
-      {/* Shows where the dragged block will land. */}
+      {/* Shows where the dragged block will land */}
       {draggedItem && (
         <div
           aria-hidden="true"
@@ -260,8 +270,9 @@ export function WidgetGrid({
 
       {layout.map((item) => {
         const widget = widgets.find((candidate) => candidate.id === item.i);
-        if (!widget) return null;
-
+        if (!widget) {
+          return null;
+        }
         const isBeingDragged = gesture?.itemId === item.i;
 
         return (
@@ -288,7 +299,7 @@ export function WidgetGrid({
                 role="presentation"
                 onPointerDown={(event) => startGesture("resize", item.i, event)}
                 className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize
-                           border-b-2 border-r-2 border-slate-500 rounded-br-md"
+                           border-b-2 border-r-2 border-line-strong rounded-br-md"
               />
             )}
           </div>
