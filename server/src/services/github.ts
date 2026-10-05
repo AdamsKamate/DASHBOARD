@@ -2,7 +2,7 @@ import { ServiceProvider, WidgetDefinition, WidgetParam, OAuthConfig } from "./t
 import { fetchJson, ExternalApiError } from "../lib/httpClient";
 
 // GitHub service: commits, issues, pull requests, releases and statistics of
-// a repository, behind a single OAuth link.
+// a repository, behind a single OAuth link
 // GitHub service: commits and issues of a repository behind a single OAuth link
 const GITHUB_API = "https://api.github.com";
 
@@ -24,7 +24,7 @@ function getOAuthConfig(): OAuthConfig {
     /*
      GitHub OAuth Apps issue tokens that never expire and no refresh token:
      no access_type / prompt equivalent is needed. allow_signup=false keeps
-     the consent screen from offering to create a GitHub account.
+     the consent screen from offering to create a GitHub account
      */
     extraAuthorizationParams: {
       allow_signup: "false",
@@ -205,7 +205,7 @@ function readChoice(params: Params, param: WidgetParam, fallback: string): strin
   return value;
 }
 
-/* "bug, urgent" → "bug,urgent"; null when no label is given */
+/* "bug, urgent" "bug,urgent"; null when no label is given */
 function readLabelsParam(params: Params): string | null {
   const labels = (readOptionalString(params, "labels") ?? "")
     .split(",")
@@ -388,18 +388,13 @@ const issues: WidgetDefinition = {
   async fetch(params, token) {
     const repo = readRepoParam(params);
     const state = readChoice(params, STATE_PARAM, "all");
+    // "bug, urgent" -> "bug,urgent": GitHub keeps the issues carrying ALL
+    // the listed labels, so the separator must be a bare comma.
     const labels = readLabelsParam(params);
     const assignee = readLoginParam(params, "assignee");
     const sort = readChoice(params, ISSUES_SORT_PARAM, "updated");
     const count = readCountParam(params);
     const accessToken = requireToken(token);
-
-    // "bug, urgent" "bug,urgent": GitHub keeps issues carrying ALL the labels
-    const labels = (readOptionalString(params, "labels") ?? "")
-      .split(",")
-      .map((label) => label.trim())
-      .filter((label) => label.length > 0)
-      .join(",");
 
     /*
      The issues endpoint also returns pull requests
@@ -516,7 +511,7 @@ const pullRequests: WidgetDefinition = {
               : "ouverte"
             : "fermée",
         author: item.user?.login ?? "inconnu",
-        branches: `${item.head.ref} → ${item.base.ref}`,
+        branches: `${item.head.ref} -> ${item.base.ref}`,
         updatedAt: item.updated_at,
         url: item.html_url,
       })),
