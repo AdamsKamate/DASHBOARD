@@ -125,7 +125,7 @@ async function resolveLabelId(labelName: string, accessToken: string): Promise<s
 
 const calendarNext: WidgetDefinition = {
   name: "google_calendar_next",
-  description: "Affiche les N prochains événements de l'agenda",
+  description: "Liste de vos prochains rendez-vous et événements planifiés.",
   params: [{ name: "count", type: "integer" }],
   async fetch(params, token) {
     const count = readCountParam(params);
@@ -167,7 +167,7 @@ const calendarNext: WidgetDefinition = {
 
 const gmailUnread: WidgetDefinition = {
   name: "google_gmail_unread",
-  description: "Affiche les N derniers messages non lus d'un libellé",
+  description: "Aperçu de vos derniers e-mails en attente de lecture selon leur catégorie",
   params: [
     { name: "label", type: "string" },
     { name: "count", type: "integer" },

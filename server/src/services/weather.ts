@@ -196,7 +196,7 @@ const cityTemperature: WidgetDefinition = {
 
 const weatherForecast: WidgetDefinition = {
   name: "weather_forecast",
-  description: "Affiche les prévisions sur N jours",
+  description: "Consultez les prévisions climatiques détaillées sur la période de votre choix.",
   params: [
     { name: "city", type: "string" },
     { name: "days", type: "integer" },

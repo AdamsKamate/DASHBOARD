@@ -1,3 +1,4 @@
+import { fieldLabelFor, isHiddenField } from "./presentation";
 // Displaying widget data without knowing the widget.
 
 /* How a value should be rendered. */
@@ -58,7 +59,7 @@ export function unitFor(record: Record<string, unknown>, key: string): string | 
  */
 export function displayableKeys(record: Record<string, unknown>): string[] {
   return Object.keys(record).filter(
-    (key) => !isUnitKey(key) && shapeOf(record[key]) !== "empty"
+    (key) => !isUnitKey(key) && !isHiddenField(key) && shapeOf(record[key]) !== "empty"
   );
 }
 
@@ -132,6 +133,13 @@ export function formatRelativeTime(isoDate: string): string {
  A readable label from a data key.
  */
 export function labelFor(key: string): string {
+  // A translated label when the field is known; the derived name otherwise,
+  // so an unknown service still reads acceptably.
+  const translated = fieldLabelFor(key);
+  if (translated) {
+    return translated;
+  }
+
   const spaced = key
     .replace(/[_-]+/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
