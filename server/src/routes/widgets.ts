@@ -22,7 +22,8 @@ import {
   runWidgetRefreshNow,
   describeWidgetJob,
 } from "../jobs/queue";
-import type { WidgetDefinition } from "../services/types";
+import { isParamRequired } from "../services/types";
+import type { WidgetDefinition, WidgetParam } from "../services/types";
 
 const router = Router();
 
@@ -31,6 +32,27 @@ const router = Router();
 const DEFAULT_POSITION: WidgetPosition = { x: 0, y: 0, w: 4, h: 2 };
 const MIN_REFRESH_RATE = 30;
 const MAX_REFRESH_RATE = 86_400;
+
+/*
+ What the configuration form needs to know about a param. Unlike
+ about.json, which keeps { name, type } as the subject requires, this route
+ serves our own front end and can describe each field fully.
+ */
+function describeParam(param: WidgetParam) {
+  return {
+    name: param.name,
+    type: param.type,
+    required: isParamRequired(param),
+    ...(param.label !== undefined && { label: param.label }),
+    ...(param.help !== undefined && { help: param.help }),
+    ...(param.default !== undefined && { default: param.default }),
+    ...(param.placeholder !== undefined && { placeholder: param.placeholder }),
+    ...(param.options !== undefined && { options: param.options }),
+    ...(param.emptyLabel !== undefined && { emptyLabel: param.emptyLabel }),
+    ...(param.min !== undefined && { min: param.min }),
+    ...(param.max !== undefined && { max: param.max }),
+  };
+}
 
 /*
  GET /widget-types
@@ -43,7 +65,7 @@ router.get("/widget-types", requireAuth, (_req: Request, res: Response) => {
       name: widget.name,
       description: widget.description,
       requiresAuth: provider.requiresAuth,
-      params: widget.params.map((param) => ({ name: param.name, type: param.type })),
+      params: widget.params.map(describeParam),
     }))
   );
   return res.json(widgetTypes);
@@ -66,9 +88,15 @@ function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] 
 
   for (const declaredParam of widget.params) {
     const value = params[declaredParam.name];
+    const isEmpty =
+      value === undefined || value === null || (typeof value === "string" && value.trim() === "");
 
-    if (value === undefined || value === null || value === "") {
-      details.push(`${declaredParam.name} is required`);
+    if (isEmpty) {
+      // An optional param left empty means "no filter" or "use the default":
+      // the widget's fetch knows which
+      if (isParamRequired(declaredParam)) {
+        details.push(`${declaredParam.name} is required`);
+      }
       continue;
     }
 
@@ -77,9 +105,23 @@ function validateParams(widget: WidgetDefinition, rawParams: unknown): string[] 
       const parsedValue = typeof value === "string" ? Number(value) : value;
       if (typeof parsedValue !== "number" || !Number.isInteger(parsedValue)) {
         details.push(`${declaredParam.name} must be an integer`);
+        continue;
+      }
+      if (declaredParam.min !== undefined && parsedValue < declaredParam.min) {
+        details.push(`${declaredParam.name} must be at least ${declaredParam.min}`);
+      }
+      if (declaredParam.max !== undefined && parsedValue > declaredParam.max) {
+        details.push(`${declaredParam.name} must be at most ${declaredParam.max}`);
       }
     } else if (typeof value !== "string") {
       details.push(`${declaredParam.name} must be a string`);
+    } else if (
+      declaredParam.options &&
+      !declaredParam.options.some((option) => option.value === value.trim())
+    ) {
+      details.push(
+        `${declaredParam.name} must be one of: ${declaredParam.options.map((o) => o.value).join(", ")}`
+      );
     }
   }
 
@@ -99,8 +141,15 @@ function normaliseParams(widget: WidgetDefinition, rawParams: Record<string, unk
   const params: WidgetParams = {};
   for (const declaredParam of widget.params) {
     const value = rawParams[declaredParam.name];
-    params[declaredParam.name] =
-      declaredParam.type === "integer" ? Number(value) : String(value).trim();
+    const text = value === undefined || value === null ? "" : String(value).trim();
+
+    if (text === "") {
+      // Empty optional param: its default when it has one, otherwise "" so
+      // the widget sees "no filter". Never Number(""), which would store 0.
+      params[declaredParam.name] = declaredParam.default ?? "";
+      continue;
+    }
+    params[declaredParam.name] = declaredParam.type === "integer" ? Number(text) : text;
   }
   return params;
 }
@@ -354,4 +403,3 @@ router.get("/widgets/:id/data", requireAuth, async (req: Request, res: Response)
 });
 
 export default router;
-

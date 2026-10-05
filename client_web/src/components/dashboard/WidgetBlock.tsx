@@ -2,6 +2,8 @@
 
 import { LoadingState, WidgetDataView } from "@/components/widgets/WidgetDataView";
 import { formatRelativeTime } from "@/lib/widgets/display";
+import { displayValue, paramLabel } from "@/lib/widgets/params";
+import type { WidgetData, WidgetInstance, WidgetType } from "@/lib/types";
 import { useWidgetData } from "@/lib/widgets/useWidgetData";
 import { isStale } from "@/lib/widgets/freshness";
 import type { WidgetInstance, WidgetType } from "@/lib/types";
@@ -31,6 +33,23 @@ export function WidgetBlock({
   // server)
   const title = widgetType?.name ?? widget.widgetTypeId;
   const serviceName = widgetType?.service ?? "unknown";
+  /*
+   Shown with the labels of the widget type when it is known ("État
+   Ouvertes", not "state open"); a filter left empty is skipped unless it
+   says what it means ("Labels Tous les labels" would just be noise, so only
+   set values and meaningful defaults appear).
+   */
+  const paramEntries = Object.entries(widget.params)
+    .map(([paramName, paramValue]): [string, string] => {
+      const param = widgetType?.params.find((candidate) => candidate.name === paramName);
+      if (!param) {
+        return [paramName, String(paramValue)];
+      }
+      const isEmpty = String(paramValue).trim() === "";
+      return [paramLabel(param), isEmpty ? "" : displayValue(param, paramValue)];
+    })
+    .filter(([, shownValue]) => shownValue !== "");
+
   const paramEntries = Object.entries(widget.params);
   const { data, isInitialLoading, isRefreshing, clockTick, refresh } = useWidgetData(
     widget.id,
@@ -114,7 +133,7 @@ export function WidgetBlock({
         <p className="flex flex-wrap gap-x-3 px-3 pt-2 text-xs text-muted">
           {paramEntries.map(([paramName, paramValue]) => (
             <span key={paramName}>
-              {paramName} <span className="font-mono text-slate-400">{String(paramValue)}</span>
+              {paramName} <span className="text-slate-400">{paramValue}</span>
             </span>
           ))}
         </p>
