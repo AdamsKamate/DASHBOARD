@@ -19,6 +19,10 @@ export interface OAuthConfig {
   clientSecret: string;
   redirectUri: string;
   scope: string;
+  /*
+   Extra parameters some providers require on the authorization URL
+   */
+  extraAuthorizationParams?: Record<string, string>;
 }
 
 export interface ServiceProvider {

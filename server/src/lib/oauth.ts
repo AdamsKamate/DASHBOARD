@@ -2,18 +2,18 @@ import crypto from "crypto";
 import { redis } from "./redis";
 import type { OAuthConfig } from "../services/types";
 
-// Generic OAuth 2.0 helper.
+// Generic OAuth 2.0 helper
 
 /*
- How long an authorization request stays valid..
+ How long an authorization request stays valid
  */
 export const AUTHORIZATION_REQUEST_TTL_SECONDS = 600;
 
-/* Prefix of the Redis keys holding pending authorization requests. */
+/* Prefix of the Redis keys holding pending authorization requests */
 const STATE_KEY_PREFIX = "oauth:state:";
 
 /*
- What we remember while the user is away on the provider's site.
+ What we remember while the user is away on the provider's site
  */
 export interface AuthorizationRequest {
   userId: string;
@@ -31,14 +31,14 @@ function stateKey(state: string): string {
 }
 
 /*
- Generates the anti-CSRF state.
+ Generates the anti-CSRF state
  */
 function generateState(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
 /*
- Fails early when a provider is misconfigured.
+ Fails early when a provider is misconfigured
  */
 function assertConfigIsComplete(service: string, config: OAuthConfig): void {
   const requiredFields = ["clientId", "clientSecret", "redirectUri", "authorizeUrl", "tokenUrl"] as const;
@@ -53,7 +53,7 @@ function assertConfigIsComplete(service: string, config: OAuthConfig): void {
 }
 
 /*
- Builds the provider's authorization URL.
+ Builds the provider's authorization URL
  */
 export function buildAuthorizationUrl(config: OAuthConfig, state: string): string {
   const url = new URL(config.authorizeUrl);
@@ -62,19 +62,25 @@ export function buildAuthorizationUrl(config: OAuthConfig, state: string): strin
   url.searchParams.set("scope", config.scope);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
+
+  // Provider-specific additions, set last so a provider can override a
+  // default if it ever needs to
+  for (const [name, value] of Object.entries(config.extraAuthorizationParams ?? {})) {
+    url.searchParams.set(name, value);
+  }
+
   return url.toString();
 }
 
 /*
  Starts an authorization request: generates the state, stores it, returns
- the URL to redirect the browser to.
+ the URL to redirect the browser to
  */
 export async function createAuthorizationRequest(
   config: OAuthConfig,
   request: AuthorizationRequest
 ): Promise<AuthorizationRequestResult> {
   assertConfigIsComplete(request.service, config);
-
   const state = generateState();
   await redis.set(
     stateKey(state),
@@ -87,13 +93,13 @@ export async function createAuthorizationRequest(
 
 /*
  Reads and destroys an authorization request. Returns null when the state is
- unknown, expired, or already used.
+ unknown, expired, or already used
  */
 export async function consumeAuthorizationState(
   state: string | undefined
 ): Promise<AuthorizationRequest | null> {
   // The state comes from the query string, so it can be missing, duplicated
-  // (Express turns ?state=a&state=b into an array), or any length.
+  // (Express turns ?state=a&state=b into an array), or any length
   if (typeof state !== "string" || !/^[0-9a-f]{64}$/.test(state)) {
     return null;
   }
@@ -105,25 +111,25 @@ export async function consumeAuthorizationState(
     return JSON.parse(storedRequest) as AuthorizationRequest;
   } catch {
     // Unreadable value: treat it as no state at all rather than crash the
-    // callback.
+    // callback
     return null;
   }
 }
 
-// Second half of the flow: exchanging the code for a token.
+// Second half of the flow: exchanging the code for a token
 
-/* What the provider gives back, normalised across providers. */
+/* What the provider gives back, normalised across providers */
 export interface OAuthTokens {
   accessToken: string;
-  /* Absent from GitHub, present on Google. */
+  /* Absent from GitHub, present on Google */
   refreshToken: string | null;
-  /* Computed from expires_in; null when the token does not expire. */
+  /* Computed from expires_in; null when the token does not expire */
   expiresAt: Date | null;
   scope: string | null;
   tokenType: string;
 }
 
-/* Raw answer of a token endpoint, before normalisation. */
+/* Raw answer of a token endpoint, before normalisation */
 interface TokenEndpointResponse {
   access_token?: string;
   refresh_token?: string;
@@ -134,7 +140,7 @@ interface TokenEndpointResponse {
   error_description?: string;
 }
 
-/* Fails the exchange without ever carrying the token or the secret. */
+/* Fails the exchange without ever carrying the token or the secret */
 export class OAuthExchangeError extends Error {
   constructor(message: string, public readonly providerError?: string) {
     super(message);
@@ -144,17 +150,16 @@ export class OAuthExchangeError extends Error {
 
 /*
  The exchange must not hang forever: a provider that never answers would
- keep the user's browser waiting on our callback.
+ keep the user's browser waiting on our callback
  */
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
 /*
- Reads the answer of a token endpoint.
+ Reads the answer of a token endpoint
  */
 async function parseTokenResponse(response: Response): Promise<TokenEndpointResponse> {
   const rawBody = await response.text();
   const contentType = response.headers.get("content-type") ?? "";
-
   if (contentType.includes("application/json")) {
     try {
       return JSON.parse(rawBody) as TokenEndpointResponse;
@@ -166,7 +171,7 @@ async function parseTokenResponse(response: Response): Promise<TokenEndpointResp
     return Object.fromEntries(new URLSearchParams(rawBody)) as TokenEndpointResponse;
   }
   // Unknown content type: try JSON first, then form encoding, rather than
-  // giving up on a provider that simply forgot its header.
+  // giving up on a provider that simply forgot its header
   try {
     return JSON.parse(rawBody) as TokenEndpointResponse;
   } catch {
@@ -175,7 +180,7 @@ async function parseTokenResponse(response: Response): Promise<TokenEndpointResp
 }
 
 /*
- Exchanges an authorization code for a token.
+ Exchanges an authorization code for a token
  */
 export async function exchangeCodeForTokens(
   config: OAuthConfig,
@@ -186,7 +191,7 @@ export async function exchangeCodeForTokens(
     code,
     client_id: config.clientId,
     client_secret: config.clientSecret,
-    // Sent again even though the provider already knows it.
+    // Sent again even though the provider already knows it
     redirect_uri: config.redirectUri,
   });
 
@@ -211,7 +216,7 @@ export async function exchangeCodeForTokens(
   const tokenResponse = await parseTokenResponse(response);
 
   // A provider can answer 200 with an error field in the body: checking the
-  // HTTP status alone is not enough.
+  // HTTP status alone is not enough
   if (tokenResponse.error) {
     throw new OAuthExchangeError(
       `The provider refused the exchange: ${tokenResponse.error_description ?? tokenResponse.error}`,
@@ -227,7 +232,7 @@ export async function exchangeCodeForTokens(
   return {
     accessToken: tokenResponse.access_token,
     refreshToken: tokenResponse.refresh_token ?? null,
-    // expires_in is a number of seconds from now.
+    // expires_in is a number of seconds from now
     expiresAt: tokenResponse.expires_in
       ? new Date(Date.now() + tokenResponse.expires_in * 1000)
       : null,
@@ -236,9 +241,9 @@ export async function exchangeCodeForTokens(
   };
 }
 
-// Refreshing an expired token.
+// Refreshing an expired token
 
-/* Raised when the refresh fails and the user must authorize again. */
+/* Raised when the refresh fails and the user must authorize again */
 export class OAuthRefreshError extends Error {
   constructor(message: string, public readonly providerError?: string) {
     super(message);
@@ -247,7 +252,7 @@ export class OAuthRefreshError extends Error {
 }
 
 /*
- Obtains a new access token from a refresh token.
+ Obtains a new access token from a refresh token
  */
 export async function refreshAccessToken(
   config: OAuthConfig,
@@ -280,7 +285,7 @@ export async function refreshAccessToken(
 
   if (tokenResponse.error) {
     // invalid_grant means the refresh token itself is dead: the user revoked
-    // the access, or changed their password.
+    // the access, or changed their password
     throw new OAuthRefreshError(
       `The provider refused the refresh: ${tokenResponse.error_description ?? tokenResponse.error}`,
       tokenResponse.error
@@ -298,7 +303,7 @@ export async function refreshAccessToken(
   return {
     accessToken: tokenResponse.access_token,
     // Most providers do NOT send a new refresh token: the old one stays
-    // valid.
+    // valid
     refreshToken: tokenResponse.refresh_token ?? null,
     expiresAt: tokenResponse.expires_in
       ? new Date(Date.now() + tokenResponse.expires_in * 1000)
