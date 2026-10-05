@@ -62,13 +62,38 @@ export interface Service {
 
 // Widget types
 
+/* One choice of a param restricted to a fixed list of values */
+export interface WidgetParamOption {
+  value: string;
+  label: string;
+}
+
+/*
+ A param as GET /widget-types describes it: about.json's { name, type } plus
+ what the configuration form needs. Everything but `required` is optional,
+ so a param declared with name and type alone still renders as a text field.
+ */
+export interface WidgetTypeParam extends AboutParam {
+  required?: boolean;
+  label?: string;
+  help?: string;
+  default?: string | number;
+  placeholder?: string;
+  /* Rendered as a select instead of a text field */
+  options?: WidgetParamOption[];
+  /* What an empty value means: "Tous les états", "Branche par défaut"... */
+  emptyLabel?: string;
+  min?: number;
+  max?: number;
+}
+
 export interface WidgetType {
   id: string;
   service: string;
   name: string;
   description: string;
   requiresAuth: boolean;
-  params: AboutParam[];
+  params: WidgetTypeParam[];
 }
 
 // Widget instances
