@@ -89,7 +89,7 @@ export function AddWidgetModal({
         return;
     }
     // Validated on leaving the step, not on every keystroke: an error shown
-    // while the user is still typing their first letter is noise.
+    // while the user is still typing their first letter is noise
     const validationErrors = validateFieldValues(selectedType.params, fieldValues);
     setFieldErrors(validationErrors);
     if (hasNoError(validationErrors)) {
@@ -226,7 +226,7 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
             >
               {index + 1}. {STEP_LABELS[step]}
             </span>
-            {index < STEP_ORDER.length - 1 && <span className="text-muted">→</span>}
+            {index < STEP_ORDER.length - 1 && <span className="text-muted"></span>}
           </li>
         );
       })}
