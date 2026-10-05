@@ -1,27 +1,40 @@
 "use client";
 
 import { Input } from "@/components/ui";
-import type { AboutParam } from "@/lib/types";
+import type { WidgetTypeParam } from "@/lib/types";
 import {
   FieldErrors,
   FieldValues,
   inputTypeFor,
-  labelFor,
+  isParamRequired,
+  paramLabel,
 } from "@/lib/widgets/params";
 
-// The configuration form of a widget, generated from its declaration.
+// Kept for the files that still import it from here.
+export { toWidgetParams } from "@/lib/widgets/params";
+
+// Generic, data-driven form: one field per entry in `params`, with no
+// knowledge of which widget it belongs to. Adding a widget type on the
+// backend (new entries in a WidgetDefinition's params) makes its
+// configuration form appear here automatically — no front-end change needed.
+//
+// What each field looks like comes from the param's description:
+//   - `options`     → a select; an optional one starts with its emptyLabel
+//                     ("Tous les états"), which sends an empty value
+//   - `emptyLabel`  → the field is optional, and the hint under it says what
+//                     leaving it empty does ("Laisser vide : tous les labels")
+//   - `label`, `placeholder`, `help`, `min`, `max` → used as is
+// A param with only { name, type } still renders as a required text field.
 
 interface WidgetParamsFormProps {
-  /* The parameters declared by the widget type, from GET /widget-types. */
-  params: AboutParam[];
+  params: WidgetTypeParam[];
   values: FieldValues;
   errors?: FieldErrors;
-  onChange: (paramName: string, value: string) => void;
-  /* Disables every field while a request is in flight. */
   disabled?: boolean;
-  /*
-   Prefix for the input identifiers.
-   */
+  onChange: (name: string, rawValue: string) => void;
+  /* Makes ids unique when two forms are on screen, and remounts the fields
+     when the widget type changes, so a leftover value from the previous type
+     never leaks into a field that shares a name but means something else. */
   idPrefix?: string;
 }
 
@@ -29,46 +42,139 @@ export function WidgetParamsForm({
   params,
   values,
   errors = {},
-  onChange,
   disabled = false,
-  idPrefix = "param",
+  onChange,
+  idPrefix = "",
 }: WidgetParamsFormProps) {
-  // A widget with no parameter is invalid per the assignment (C8). Saying so
-  // is more useful than rendering an empty block.
   if (params.length === 0) {
-    return (
-      <p className="text-sm text-amber">
-        Ce widget ne déclare aucun paramètre configurable.
-      </p>
-    );
+    return <p className="text-sm text-slate-400">Ce widget n&apos;a rien à configurer.</p>;
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {params.map((param) => (
-        <Input
-          // The key includes the prefix: switching widget type replaces the
-          // fields instead of reusing them, so a value typed for the previous
-          // type never lingers in an input.
-          key={`${idPrefix}-${param.name}`}
-          id={`${idPrefix}-${param.name}`}
-          label={labelFor(param.name)}
-          type={inputTypeFor(param.type)}
-          // On a phone, this brings up the numeric keypad rather than the
-          // full keyboard.
-          inputMode={param.type === "integer" ? "numeric" : undefined}
-          // step="1" tells the browser to refuse decimals on its own.
-          step={param.type === "integer" ? 1 : undefined}
-          value={values[param.name] ?? ""}
-          onChange={(event) => onChange(param.name, event.target.value)}
-          error={errors[param.name]}
-          disabled={disabled}
-          required
-          // The machine name stays visible: the user configuring a widget
-          // sees the same wording as the API documentation.
-          placeholder={param.name}
-        />
-      ))}
+    <>
+      {params.map((param) => {
+        const required = isParamRequired(param);
+        // "(facultatif)" rather than an asterisk on required fields: the user
+        // sees at a glance which fields can be skipped.
+        const label = required ? paramLabel(param) : `${paramLabel(param)} (facultatif)`;
+        const hint = hintFor(param, required);
+        const fieldId = `${idPrefix}-${param.name}`;
+        const value = values[param.name] ?? "";
+
+        return (
+          <div key={fieldId} className="flex flex-col gap-1">
+            {param.options ? (
+              <SelectField
+                id={fieldId}
+                label={label}
+                param={param}
+                required={required}
+                value={value}
+                error={errors[param.name]}
+                disabled={disabled}
+                onChange={(nextValue) => onChange(param.name, nextValue)}
+              />
+            ) : (
+              <Input
+                label={label}
+                type={inputTypeFor(param.type)}
+                inputMode={param.type === "integer" ? "numeric" : undefined}
+                min={param.min}
+                max={param.max}
+                step={param.type === "integer" ? 1 : undefined}
+                placeholder={param.placeholder}
+                value={value}
+                onChange={(event) => onChange(param.name, event.target.value)}
+                error={errors[param.name]}
+                disabled={disabled}
+                required={required}
+              />
+            )}
+            {hint && <p className="text-xs text-slate-500">{hint}</p>}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/* The line under a field: its own help, then what leaving it empty does. */
+function hintFor(param: WidgetTypeParam, required: boolean): string {
+  const parts: string[] = [];
+  if (param.help) {
+    parts.push(param.help);
+  }
+  // A select already shows its emptyLabel as the first choice
+  if (!required && !param.options && param.emptyLabel) {
+    parts.push(`Laisser vide : ${param.emptyLabel.charAt(0).toLowerCase()}${param.emptyLabel.slice(1)}.`);
+  }
+  if (param.type === "integer" && param.min !== undefined && param.max !== undefined) {
+    parts.push(`Entre ${param.min} et ${param.max}.`);
+  }
+  return parts.join(" ");
+}
+
+function SelectField({
+  id,
+  label,
+  param,
+  required,
+  value,
+  error,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  param: WidgetTypeParam;
+  required: boolean;
+  value: string;
+  error?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const errorId = `${id}-error`;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm text-slate-300">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        required={required}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full rounded-md border bg-ink px-3 py-2 text-sm text-white
+                    focus:border-signal focus:outline-none disabled:opacity-50
+                    ${error ? "border-flare" : "border-line"}`}
+      >
+        {required ? (
+          // Required with nothing chosen yet: a visible prompt that cannot be
+          // submitted, rather than silently picking the first option
+          value === "" && (
+            <option value="" disabled>
+              Choisir…
+            </option>
+          )
+        ) : (
+          // Optional: the empty choice comes first and says what it means
+          <option value="">{param.emptyLabel ?? "Aucun filtre"}</option>
+        )}
+        {param.options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <p id={errorId} role="alert" className="text-xs text-flare">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
