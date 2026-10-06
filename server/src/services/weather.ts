@@ -28,6 +28,14 @@ interface GeocodingResponse {
 }
 
 interface CurrentWeatherResponse {
+  current?: {
+    time: string;
+    temperature_2m: number;
+    relative_humidity_2m: number;
+    apparent_temperature: number;
+    wind_speed_10m: number;
+    weather_code: number;
+  };
   current_weather?: {
     temperature: number;
     windspeed: number;
@@ -38,6 +46,14 @@ interface CurrentWeatherResponse {
 }
 
 interface ForecastResponse {
+  /*
+   Open-Meteo has no daily humidity: the variable exists hourly only. The
+   hourly series is therefore requested and averaged per day below
+  */
+  hourly?: {
+    time: string[];
+    relative_humidity_2m: number[];
+  };
   daily?: {
     time: string[];
     temperature_2m_max: number[];
@@ -160,6 +176,39 @@ async function geocodeCity(city: string): Promise<GeocodedCity> {
   return geocodedCity;
 }
 
+/*
+ Average humidity per calendar day, from the hourly series
+ */
+function averageHumidityByDay(hourly?: {
+  time: string[];
+  relative_humidity_2m: number[];
+}): Map<string, number> {
+  const sums = new Map<string, { total: number; count: number }>();
+
+  if (!hourly?.time) {
+    return new Map();
+  }
+
+  hourly.time.forEach((timestamp, index) => {
+    const humidity = hourly.relative_humidity_2m[index];
+    if (typeof humidity !== "number") {
+      return;
+    }
+
+    // "2026-10-07T14:00" -> "2026-10-07"
+    const day = timestamp.slice(0, 10);
+    const entry = sums.get(day) ?? { total: 0, count: 0 };
+    entry.total += humidity;
+    entry.count += 1;
+    sums.set(day, entry);
+  });
+  const averages = new Map<string, number>();
+  for (const [day, { total, count }] of sums) {
+    averages.set(day, Math.round(total / count));
+  }
+  return averages;
+}
+
 // Widgets
 const cityTemperature: WidgetDefinition = {
   name: "city_temperature",
@@ -173,25 +222,34 @@ const cityTemperature: WidgetDefinition = {
     const location = await geocodeCity(city);
     const response = await fetchJson<CurrentWeatherResponse>(
       `${FORECAST_URL}?latitude=${location.latitude}&longitude=${location.longitude}` +
-        `&current_weather=true&timezone=auto`
+        `&current=temperature_2m,relative_humidity_2m,apparent_temperature,` +
+        `wind_speed_10m,weather_code&timezone=auto`
     );
-    const currentWeather = response.current_weather;
-    if (!currentWeather) {
+
+    const current = response.current;
+    const legacy = response.current_weather;
+
+    if (!current && !legacy) {
       throw new ExternalApiError("unreadable", "Open-Meteo n'a renvoyé aucune donnée actuelle");
     }
 
     return {
       city: location.name,
       country: location.country,
-      temperature: currentWeather.temperature,
+      temperature: current?.temperature_2m ?? legacy!.temperature,
       // The unit travels with the value: the front end displays it without
-      // having to know what Open-Meteo returns
+      // having to know what Open Meteo returns
       temperatureUnit: "°C",
-      windSpeed: currentWeather.windspeed,
+      // What the temperature feels like, wind and humidity included. Absent
+      // from the legacy block, hence the optional chaining
+      apparentTemperature: current?.apparent_temperature ?? null,
+      humidity: current?.relative_humidity_2m ?? null,
+      humidityUnit: "%",
+      windSpeed: current?.wind_speed_10m ?? legacy!.windspeed,
       windSpeedUnit: "km/h",
-      condition: describeWeatherCode(currentWeather.weathercode),
-      weatherCode: currentWeather.weathercode,
-      observedAt: currentWeather.time,
+      condition: describeWeatherCode(current?.weather_code ?? legacy!.weathercode),
+      weatherCode: current?.weather_code ?? legacy!.weathercode,
+      observedAt: current?.time ?? legacy!.time,
     };
   },
 };
@@ -218,8 +276,11 @@ const weatherForecast: WidgetDefinition = {
     const response = await fetchJson<ForecastResponse>(
       `${FORECAST_URL}?latitude=${location.latitude}&longitude=${location.longitude}` +
         `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode` +
+        `&hourly=relative_humidity_2m` +
         `&forecast_days=${days}&timezone=auto`
     );
+    const humidityByDay = averageHumidityByDay(response.hourly);
+
     const daily = response.daily;
     if (!daily?.time) {
       throw new ExternalApiError("unreadable", "Open-Meteo n'a renvoyé aucune prévision");
@@ -228,6 +289,7 @@ const weatherForecast: WidgetDefinition = {
       city: location.name,
       country: location.country,
       temperatureUnit: "°C",
+      humidityUnit: "%",
       days: daily.time.map((date, index) => ({
         date,
         minTemperature: daily.temperature_2m_min[index],
@@ -235,7 +297,12 @@ const weatherForecast: WidgetDefinition = {
         precipitation: daily.precipitation_sum[index],
         precipitationUnit: "mm",
         condition: describeWeatherCode(daily.weathercode[index]),
+        // The raw WMO code travels alongside the wording so the front end can
+        // pick an icon
         weatherCode: daily.weathercode[index],
+        // null rather than 0 when the hourly series does not cover the day:
+        // a missing figure must not read as "dry air"
+        humidity: humidityByDay.get(date) ?? null
       })),
     };
   },
@@ -243,7 +310,7 @@ const weatherForecast: WidgetDefinition = {
 
 export const weatherService: ServiceProvider = {
   name: "weather",
-  // No authentication: no OAuth, no token, no account to link.
+  // No authentication: no OAuth, no token, no account to link
   requiresAuth: false,
   widgets: [cityTemperature, weatherForecast],
 };
