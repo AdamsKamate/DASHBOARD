@@ -2,20 +2,20 @@ import { ServiceProvider, WidgetDefinition } from "./types";
 import { fetchJson, ExternalApiError } from "../lib/httpClient";
 import { cacheGet, cacheSet } from "../lib/redis";
 
-// Weather service the first concrete ServiceProvider.
+// Weather service the first concrete ServiceProvider
 
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 
 /*
- How long a city's coordinates stay cached.
+ How long a city's coordinates stay cached
  */
 const GEOCODING_CACHE_TTL_SECONDS = 86_400;
 
 const MAX_FORECAST_DAYS = 16; // Open-Meteo's own limit
 const DEFAULT_FORECAST_DAYS = 3;
 
-// Open-Meteo response shapes.
+// Open-Meteo response shapes
 
 interface GeocodingResponse {
   results?: Array<{
@@ -57,7 +57,7 @@ interface GeocodedCity {
 // Weather codes
 
 /*
- Open-Meteo answers a WMO numeric code, not a label..
+ Open-Meteo answers a WMO numeric code, not a label
  */
 const WEATHER_CODE_LABELS: Record<number, string> = {
   0: "Ciel dégagé",
@@ -128,7 +128,7 @@ function readDaysParam(params: Record<string, string | number>): number {
 // Geocoding
 
 /*
- Turns a city name into coordinates, through Redis when possible.
+ Turns a city name into coordinates, through Redis when possible
  */
 async function geocodeCity(city: string): Promise<GeocodedCity> {
   const cacheKey = `weather:geocode:${city.toLowerCase()}`;
@@ -145,7 +145,7 @@ async function geocodeCity(city: string): Promise<GeocodedCity> {
   const location = response.results?.[0];
   if (!location) {
     // "rejected" and not "provider_error": Open-Meteo answered correctly,
-    // the city simply does not exist. The user must fix their parameter.
+    // the city simply does not exist. The user must fix their parameter
     throw new ExternalApiError("rejected", `Ville introuvable : « ${city} »`);
   }
 
@@ -185,7 +185,7 @@ const cityTemperature: WidgetDefinition = {
       country: location.country,
       temperature: currentWeather.temperature,
       // The unit travels with the value: the front end displays it without
-      // having to know what Open-Meteo returns.
+      // having to know what Open-Meteo returns
       temperatureUnit: "°C",
       windSpeed: currentWeather.windspeed,
       windSpeedUnit: "km/h",
@@ -235,6 +235,7 @@ const weatherForecast: WidgetDefinition = {
         precipitation: daily.precipitation_sum[index],
         precipitationUnit: "mm",
         condition: describeWeatherCode(daily.weathercode[index]),
+        weatherCode: daily.weathercode[index],
       })),
     };
   },
@@ -242,8 +243,7 @@ const weatherForecast: WidgetDefinition = {
 
 export const weatherService: ServiceProvider = {
   name: "weather",
-  // No authentication: no OAuth, no token, no account to link. Every
-  // logged-in user can add these widgets straight away.
+  // No authentication: no OAuth, no token, no account to link.
   requiresAuth: false,
   widgets: [cityTemperature, weatherForecast],
 };
