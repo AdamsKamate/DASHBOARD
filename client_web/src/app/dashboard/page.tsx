@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, FormError } from "@/components/ui";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { AddWidgetModal } from "@/components/dashboard/AddWidgetModal";
+import { ServiceIcons } from "@/components/dashboard/ServiceIcons";
 import { api, ApiError, USE_MOCK } from "@/lib/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { RequireAuth } from "@/lib/auth/guards";
@@ -127,6 +128,10 @@ function DashboardContent() {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          {/* State of every service at a glance, and a shortcut to linking
+              one. The Services button stays: it is where unlinking lives. */}
+          <ServiceIcons services={services} />
+
           <Link href="/services">
             <Button variant="secondary">Services</Button>
           </Link>
