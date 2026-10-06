@@ -126,7 +126,18 @@ async function resolveLabelId(labelName: string, accessToken: string): Promise<s
 const calendarNext: WidgetDefinition = {
   name: "google_calendar_next",
   description: "Liste de vos prochains rendez-vous et événements planifiés.",
-  params: [{ name: "count", type: "integer" }],
+  params: [
+    {
+      name: "count",
+      type: "integer",
+      // The same "count" means events here and messages below: naming it from
+      // what it counts is the whole point of declaring a label.
+      label: "Nombre d'événements à afficher",
+      default: DEFAULT_ITEMS,
+      min: 1,
+      max: MAX_ITEMS,
+    },
+  ],
   async fetch(params, token) {
     const count = readCountParam(params);
     if (!token) {
@@ -169,8 +180,22 @@ const gmailUnread: WidgetDefinition = {
   name: "google_gmail_unread",
   description: "Aperçu de vos derniers e-mails en attente de lecture selon leur catégorie",
   params: [
-    { name: "label", type: "string" },
-    { name: "count", type: "integer" },
+    {
+      name: "label",
+      type: "string",
+      // "Libellé" alone would be ambiguous on a dashboard that also holds RSS
+      // feeds and GitHub labels; naming Gmail removes the doubt.
+      label: "Libellé Gmail",
+      default: "INBOX",
+    },
+    {
+      name: "count",
+      type: "integer",
+      label: "Nombre de messages à afficher",
+      default: DEFAULT_ITEMS,
+      min: 1,
+      max: MAX_ITEMS,
+    },
   ],
 
   async fetch(params, token) {

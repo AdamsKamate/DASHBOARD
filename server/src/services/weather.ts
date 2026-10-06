@@ -164,7 +164,9 @@ async function geocodeCity(city: string): Promise<GeocodedCity> {
 const cityTemperature: WidgetDefinition = {
   name: "city_temperature",
   description: "Affiche la météo actuelle d'une ville",
-  params: [{ name: "city", type: "string" }],
+  params: [
+    { name: "city", type: "string", label: "Ville", default: "Paris" },
+  ],
 
   async fetch(params) {
     const city = readCityParam(params);
@@ -198,8 +200,15 @@ const weatherForecast: WidgetDefinition = {
   name: "weather_forecast",
   description: "Consultez les prévisions climatiques détaillées sur la période de votre choix.",
   params: [
-    { name: "city", type: "string" },
-    { name: "days", type: "integer" },
+    { name: "city", type: "string", label: "Ville", default: "Paris" },
+    {
+      name: "days",
+      type: "integer",
+      label: "Nombre de jours",
+      default: DEFAULT_FORECAST_DAYS,
+      min: 1,
+      max: MAX_FORECAST_DAYS,
+    },
   ],
 
   async fetch(params) {
