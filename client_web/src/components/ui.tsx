@@ -57,6 +57,11 @@ export function Input({
       </label>
       <input
         id={inputId}
+        /*
+         Browsers offer their saved entries on any field whose name and type
+         look familiar.
+        */
+        autoComplete="off"
         // aria-invalid and aria-describedby link the field to its message:
         // a screen reader then reads the error when focus enters the field
         aria-invalid={error ? true : undefined}
