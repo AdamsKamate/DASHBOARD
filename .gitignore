@@ -5,3 +5,4 @@ build/
 .next/
 *.log
 .DS_Store
+logo_svg/
