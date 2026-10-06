@@ -1,14 +1,14 @@
 import { ServiceProvider, WidgetDefinition, OAuthConfig } from "./types";
 import { fetchJson, ExternalApiError } from "../lib/httpClient";
 
-// Google service: Calendar and Gmail behind a single OAuth link.
+// Google service: Calendar and Gmail behind a single OAuth link
 const CALENDAR_EVENTS_URL =
   "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 const GMAIL_LABELS_URL = "https://gmail.googleapis.com/gmail/v1/users/me/labels";
 
 /*
- The permissions asked of the user.
+ The permissions asked of the user
  */
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
@@ -88,6 +88,26 @@ function readLabelParam(params: Record<string, string | number>): string {
   return label;
 }
 
+/*
+ Decodes the HTML entities Gmail leaves in its snippets and subjects
+ */
+function decodeHtmlEntities(text: string): string {
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+
+  return text
+    // Numeric first: &#39; and &#x27; are the same apostrophe
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (whole, name) => namedEntities[name.toLowerCase()] ?? whole);
+}
+
 /* The value of a header, whatever case Gmail used for its name */
 function findHeader(message: GmailMessageResponse, headerName: string): string | null {
   const header = message.payload?.headers?.find(
@@ -131,7 +151,7 @@ const calendarNext: WidgetDefinition = {
       name: "count",
       type: "integer",
       // The same "count" means events here and messages below: naming it from
-      // what it counts is the whole point of declaring a label.
+      // what it counts is the whole point of declaring a label
       label: "Nombre d'événements à afficher",
       default: DEFAULT_ITEMS,
       min: 1,
@@ -143,13 +163,6 @@ const calendarNext: WidgetDefinition = {
     if (!token) {
       throw new ExternalApiError("rejected", "Compte Google non lié");
     }
-
-    /*
-     timeMin=now with singleEvents and orderBy=startTime is the only way to
-     get events in chronological order: without singleEvents, a weekly
-     meeting comes back as one recurring entry rather than its next
-     occurrence, and orderBy is rejected
-     */
     const url =
       `${CALENDAR_EVENTS_URL}?timeMin=${encodeURIComponent(new Date().toISOString())}` +
       `&maxResults=${count}&singleEvents=true&orderBy=startTime`;
@@ -234,17 +247,21 @@ const gmailUnread: WidgetDefinition = {
 
     return {
       label,
-      // The estimate counts every unread message of the label, not just the
-      // ones displayed: "3 of 47 unread" is more useful than "3"
       unreadCount: list.resultSizeEstimate ?? messageRefs.length,
-      messages: messages.map((message) => ({
-        subject: findHeader(message, "Subject") ?? "(sans objet)",
-        from: findHeader(message, "From"),
+      /*
+       Sorted most recent first, explicitly
+      */
+      messages: messages
+        .slice()
+        .sort((first, second) => Number(second.internalDate ?? 0) - Number(first.internalDate ?? 0))
+        .map((message) => ({
+        subject: decodeHtmlEntities(findHeader(message, "Subject") ?? "(sans objet)"),
+        from: decodeHtmlEntities(findHeader(message, "From") ?? ""),
         date: message.internalDate
           ? new Date(Number(message.internalDate)).toISOString()
           : findHeader(message, "Date"),
         // The snippet is the preview Gmail itself shows in a message list
-        snippet: message.snippet ?? null,
+        snippet: message.snippet ? decodeHtmlEntities(message.snippet) : null,
       })),
     };
   },

@@ -31,7 +31,13 @@ export function ServiceIcons({ services }: ServiceIconsProps) {
   }
 
   function handleClick(service: Service) {
-    if (service.subscribed) {
+    /*
+     A service needing no authorisation has nothing to link, but the icon must
+     still do something: a button that looks clickable and does nothing is
+     worse than no button. It opens the Services page, where its state is
+     explained.
+    */
+    if (service.subscribed || !service.requiresAuth) {
       router.push("/services");
       return;
     }
@@ -49,9 +55,6 @@ export function ServiceIcons({ services }: ServiceIconsProps) {
         const display = SERVICES[service.name];
         const name = display?.name ?? service.name;
 
-        // A service needing no authorisation has nothing to link and nothing
-        // to manage: shown, but not clickable
-        const isActionable = service.requiresAuth;
         const isAvailable = service.subscribed || !service.requiresAuth;
 
         const state = !service.requiresAuth
@@ -65,7 +68,6 @@ export function ServiceIcons({ services }: ServiceIconsProps) {
             <button
               type="button"
               onClick={() => handleClick(service)}
-              disabled={!isActionable}
               /*
                The state is in the label, not only in the dimming: someone who
                cannot see the opacity must still hear it
@@ -75,7 +77,7 @@ export function ServiceIcons({ services }: ServiceIconsProps) {
               className={`flex h-8 w-8 items-center justify-center rounded-md transition
                           hover:bg-raised
                           ${isAvailable ? "opacity-100" : "opacity-35 hover:opacity-70"}
-                          ${isActionable ? "cursor-pointer" : "cursor-default"}`}
+                          cursor-pointer`}
             >
               {display ? (
                 <img

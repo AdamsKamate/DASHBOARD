@@ -35,7 +35,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /*
- Keys whose value is the unit of another key.
+ Keys whose value is the unit of another key
  */
 const UNIT_SUFFIX = "Unit";
 
@@ -43,19 +43,19 @@ export function isUnitKey(key: string): boolean {
   return key.endsWith(UNIT_SUFFIX) && key.length > UNIT_SUFFIX.length;
 }
 
-/* The key a unit belongs to: "temperatureUnit" -> "temperature". */
+/* The key a unit belongs to: "temperatureUnit" -> "temperature" */
 export function valueKeyOfUnit(unitKey: string): string {
   return unitKey.slice(0, -UNIT_SUFFIX.length);
 }
 
-/* The unit declared for a key, when the record carries one. */
+/* The unit declared for a key, when the record carries one */
 export function unitFor(record: Record<string, unknown>, key: string): string | null {
   const unit = record[`${key}${UNIT_SUFFIX}`];
   return typeof unit === "string" ? unit : null;
 }
 
 /*
- The keys worth displaying, in order.
+ The keys worth displaying, in order
  */
 export function displayableKeys(record: Record<string, unknown>): string[] {
   return Object.keys(record).filter(
@@ -64,7 +64,7 @@ export function displayableKeys(record: Record<string, unknown>): string[] {
 }
 
 /*
- Formats a single value for display.
+ Formats a single value for display
  */
 export function formatScalar(value: unknown, unit?: string | null): string {
   let text: string;
@@ -76,7 +76,6 @@ export function formatScalar(value: unknown, unit?: string | null): string {
   } else {
     text = String(value);
   }
-
   // No space before "°C" or "%"
   if (!unit) {
     return text;
@@ -84,13 +83,13 @@ export function formatScalar(value: unknown, unit?: string | null): string {
   return unit === "%" ? `${text}${unit}` : `${text} ${unit}`;
 }
 
-/* True when a string looks like an ISO date or date-time. */
+/* True when a string looks like an ISO date or date-time */
 export function looksLikeDate(value: unknown): boolean {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2})?/.test(value);
 }
 
 /*
- Shows a date the way a human reads it.
+ Shows a date the way a human reads it
  */
 export function formatDate(value: string): string {
   const parsed = new Date(value);
@@ -101,9 +100,16 @@ export function formatDate(value: string): string {
   }
 
   const hasTime = /[T ]\d{2}:\d{2}/.test(value);
+
+  /*
+   The year is shown only when it is not the current one.
+  */
+  const isAnotherYear = parsed.getFullYear() !== new Date().getFullYear();
+
   return parsed.toLocaleString("fr-FR", {
     day: "2-digit",
     month: "short",
+    ...(isAnotherYear ? { year: "numeric" } : {}),
     ...(hasTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   });
 }
@@ -134,7 +140,7 @@ export function formatRelativeTime(isoDate: string): string {
  */
 export function labelFor(key: string): string {
   // A translated label when the field is known; the derived name otherwise,
-  // so an unknown service still reads acceptably.
+  // so an unknown service still reads acceptably
   const translated = fieldLabelFor(key);
   if (translated) {
     return translated;
@@ -150,7 +156,8 @@ export function labelFor(key: string): string {
 /*
   Picks the field that best identifies a row.
  */
-const HEADLINE_KEYS = ["title", "name", "message", "summary", "label", "date", "subject"];
+
+const HEADLINE_KEYS = ["title", "subject", "name", "message", "summary", "label", "date"];
 
 export function headlineKeyOf(row: Record<string, unknown>): string | null {
   for (const candidate of HEADLINE_KEYS) {
