@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { WidgetData } from "@/lib/types";
 import { classifyWidgetError, errorStyleFor } from "@/lib/widgets/errors";
+import { WeatherView } from "./WeatherView";
 import type { WidgetPresentation } from "@/lib/widgets/presentation";
 import {
   displayableKeys,
@@ -17,24 +18,25 @@ import {
   unitFor,
 } from "@/lib/widgets/display";
 
-// Rendering the data of a widget, whatever its type.
+// Rendering the data of a widget, whatever its type
 
 interface WidgetDataViewProps {
   state: WidgetData;
   onRetry?: () => void;
-  /** Which field to show large, when the widget type declares one. */
+  /* Lets a known widget take over its own rendering */
+  widgetTypeId?: string;
+  /* Which field to show large, when the widget type declares one */
   presentation?: WidgetPresentation;
 }
 
-export function WidgetDataView({ state, onRetry, presentation }: WidgetDataViewProps) {
+export function WidgetDataView({ state, onRetry, widgetTypeId, presentation }: WidgetDataViewProps) {
   if (state.status === "error") {
     return (
       <div className="flex flex-col gap-3">
         <ErrorState message={state.error} onRetry={onRetry} />
 
         {/* The last known values stay below the message when the server kept
-            them. A temperature from ten minutes ago, clearly labelled as
-            such, is more useful than an empty block. */}
+            them */}
         {state.data && (
           <div className="opacity-60">
             <p className="mb-1 text-xs text-muted">Dernières données connues</p>
@@ -46,7 +48,7 @@ export function WidgetDataView({ state, onRetry, presentation }: WidgetDataViewP
   }
 
   // "pending" means the worker has not fetched anything yet: the widget was
-  // just added, or its configuration changed. It is not an error.
+  // just added, or its configuration changed
   if (state.status === "pending" || !state.data) {
     return <PendingState />;
   }
@@ -56,7 +58,7 @@ export function WidgetDataView({ state, onRetry, presentation }: WidgetDataViewP
 
   // The headline only appears when the field is actually there: a widget
   // whose API changed shape falls back on the plain list rather than showing
-  // an empty hero.
+  // an empty hero
   if (headline && (typeof headlineValue === "number" || typeof headlineValue === "string")) {
     return (
       <div className="flex flex-col gap-3">
@@ -70,21 +72,26 @@ export function WidgetDataView({ state, onRetry, presentation }: WidgetDataViewP
     );
   }
 
+  /*
+   Weather gets its own layout. Everything else keeps the generic one, which
+   is what guarantees a widget added on the server still displays
+  */
+  if (widgetTypeId === "city_temperature" || widgetTypeId === "weather_forecast") {
+    return <WeatherView data={state.data} />;
+  }
+
   return <RecordView record={state.data} />;
 }
 
-/** Which keys the headline already shows, so the list does not repeat them. */
+/* Which keys the headline already shows, so the list does not repeat them */
 function headlineKeysOf(headline: NonNullable<WidgetPresentation["headline"]>): string[] {
   return [headline.valueKey, headline.unitKey, headline.captionKey].filter(
     (key): key is string => typeof key === "string"
   );
 }
 
-/**
- * The one number that matters, large.
- *
- * A dashboard is glanced at, not read: a temperature at 2.5rem is legible
- * from across a room, where the same figure in a key/value row is not.
+/*
+  The one number that matters, large
  */
 function HeadlineView({
   value,
@@ -110,7 +117,7 @@ function HeadlineView({
   );
 }
 
-/* Shown while the first request is in flight. */
+/* Shown while the first request is in flight */
 export function LoadingState() {
   return (
     <div className="flex flex-col gap-2 animate-pulse" role="status" aria-label="Chargement">
@@ -137,7 +144,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
     <div
       // A framed, tinted block rather than a line of red text: on a grid of
       // twelve widgets, a failure has to be visible at a glance, without
-      // reading.
+      // reading
       className={`flex flex-col gap-2 rounded-md border p-3 ${style.border} ${style.background}`}
     >
       <div className="flex items-start gap-2">
@@ -145,7 +152,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           {style.icon}
         </span>
         {/* role="alert" so a screen reader announces the failure instead of
-            leaving the user with a silently empty widget. */}
+            leaving the user with a silently empty widget */}
         <p role="alert" className={`text-sm ${style.text}`}>
           {message ?? "Les données n'ont pas pu être récupérées."}
         </p>
@@ -163,9 +170,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
           </Link>
         )}
 
-        {/* Offered only when retrying could plausibly work. A button that
-            cannot change the outcome — a city that does not exist, an expired
-            authorisation — only invites the user to click in vain. */}
+        {/* Offered only when retrying could plausibly work */}
         {presentation.canRetry && onRetry && (
           <button
             type="button"
@@ -180,7 +185,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => vo
   );
 }
 
-/* A record: one line per key, nested blocks for anything deeper. */
+/* A record: one line per key, nested blocks for anything deeper */
 function RecordView({
   record,
   skipKeys = [],

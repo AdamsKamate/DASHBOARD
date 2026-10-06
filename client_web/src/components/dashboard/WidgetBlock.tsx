@@ -44,7 +44,7 @@ export function WidgetBlock({
     widget.params
   );
 
-  // clockTick is read so React redraws the age below; its value is unused.
+  // clockTick is read so React redraws the age below; its value is unused
   void clockTick;
 
   const isDataStale = isStale(data?.fetchedAt ?? null, widget.refreshRate);
@@ -57,14 +57,14 @@ export function WidgetBlock({
       <header className="flex items-stretch justify-between gap-2 bg-raised border-b border-line">
         {/* A button, not a div: it can be reached with Tab, and the arrow keys
             then move the block. Dragging with a mouse and moving with the
-            keyboard use the same handle. */}
+            keyboard use the same handle */}
         <button
           type="button"
           onPointerDown={onDragHandlePointerDown}
           onKeyDown={onDragHandleKeyDown}
           disabled={!isEditable}
           // touch-none tells the browser we handle touch ourselves, otherwise
-          // a drag on a phone scrolls the page instead of moving the block.
+          // a drag on a phone scrolls the page instead of moving the block
           className="flex-1 min-w-0 text-left px-3 py-2 touch-none select-none
                      enabled:cursor-move disabled:cursor-default"
           aria-label={
@@ -78,7 +78,7 @@ export function WidgetBlock({
             <span className="text-sm font-semibold text-white truncate">{title}</span>
           </span>
           {/* The configuration, not the service name: two weather widgets are
-              told apart by their city, never by the word "weather". */}
+              told apart by their city, never by the word "weather" */}
           {subtitle && (
             <span className="block truncate text-xs text-muted" title={technicalName}>
               {subtitle}
@@ -87,7 +87,7 @@ export function WidgetBlock({
         </button>
 
         {/* Shown only during a background refresh: the content stays on
-            screen, and this says why it is about to change. */}
+            screen, and this says why it is about to change */}
         {isRefreshing && (
           <span
             role="status"
@@ -123,13 +123,11 @@ export function WidgetBlock({
       </header>
 
       <div className="flex-1 p-3 overflow-auto">
-        {/* The skeleton only shows before the FIRST answer. A later refresh
-            leaves the data in place: replacing it every cycle would make the
-            dashboard flash. */}
+        {/* The skeleton only shows before the FIRST answer */}
         {isInitialLoading && !data ? (
           <LoadingState />
         ) : (
-          data && <WidgetDataView state={data} onRetry={refresh} presentation={presentation} />
+          data && <WidgetDataView state={data} onRetry={refresh} widgetTypeId={widget.widgetTypeId} presentation={presentation} />
         )}
       </div>
 
@@ -138,7 +136,7 @@ export function WidgetBlock({
         {data?.fetchedAt && (
           <span
             // The exact instant on hover: "il y a 5 min" is readable, but
-            // someone diagnosing a stuck widget wants the timestamp.
+            // someone diagnosing a stuck widget wants the timestamp
             title={new Date(data.fetchedAt).toLocaleString("fr-FR")}
             className={isDataStale ? "text-amber" : undefined}
           >
