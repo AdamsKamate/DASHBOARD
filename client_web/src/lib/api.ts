@@ -14,14 +14,14 @@ import type {
 } from "./types";
 
 // API client
-// The only module allowed to talk to the backend.
+// The only module allowed to talk to the backend
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 const MOCK_LATENCY_MS = Number(process.env.NEXT_PUBLIC_MOCK_LATENCY ?? 300);
 
 /*
- Error carrying the HTTP status and the server message.
+ Error carrying the HTTP status and the server message
  */
 export class ApiError extends Error {
   constructor(
@@ -37,15 +37,14 @@ export class ApiError extends Error {
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 async function mockRequest<T>(method: Method, path: string, body?: unknown): Promise<T> {
-  // Loaded lazily so that the mock is never bundled into a real-server build.
+  // Loaded lazily so that the mock is never bundled into a real-server build
   const { handle } = await import("./mock/handlers");
 
-  // Simulated latency: without it, loading states are never visible during
-  // development and only show up once the real server is plugged in.
+  // Simulated latency
   await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
 
   // Round trip through JSON so the page receives a copy, exactly as it would
-  // from the network, and cannot mutate the mock state by accident.
+  // from the network, and cannot mutate the mock state by accident
   const res = handle(method, path, body === undefined ? undefined : JSON.parse(JSON.stringify(body)));
 
   if (res.status >= 400) {
@@ -88,7 +87,7 @@ export function setUnauthorizedListener(listener: UnauthorizedListener | null): 
 }
 
 /*
- Routes where a 401 is an expected answer, not an expired session:
+ Routes where a 401 is an expected answer, not an expired session
  */
 const ROUTES_WHERE_401_IS_EXPECTED = [
   "/auth/login",
@@ -138,7 +137,7 @@ export const api = {
     unlink: (service: string) => request<void>("DELETE", `/services/${service}/subscription`),
 
     /*
-     Starts the OAuth flow.
+     Starts the OAuth flow
      */
     link: async (service: string): Promise<void> => {
       if (USE_MOCK) {
@@ -168,6 +167,8 @@ export const api = {
 
   admin: {
     listUsers: () => request<AdminUser[]>("GET", "/admin/users"),
+    setUserRole: (id: string, role: "user" | "admin") =>
+      request<AdminUser>("PATCH", `/admin/users/${id}/role`, { role }),
     deleteUser: (id: string) => request<void>("DELETE", `/admin/users/${id}`),
   },
 };

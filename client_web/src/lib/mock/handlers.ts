@@ -1,7 +1,7 @@
 import { db, persist, newId, SERVICES, WIDGET_TYPES, MockUser, MockWidget } from "./db";
 import type { WidgetParams, Position } from "../types";
 
-// Mock route handlers.
+// Mock route handlers
 
 export interface MockRequest {
   method: string;
@@ -47,7 +47,7 @@ function findCurrentUser(): MockUser | null {
   return user ?? null;
 }
 
-/* Rejects the request with 401 when nobody is logged in. */
+/* Rejects the request with 401 when nobody is logged in */
 function withAuth(handler: AuthenticatedHandler): RouteHandler {
   return (request) => {
     const user = findCurrentUser();
@@ -58,7 +58,7 @@ function withAuth(handler: AuthenticatedHandler): RouteHandler {
   };
 }
 
-/* Rejects the request with 403 when the logged-in user is not an admin. */
+/* Rejects the request with 403 when the logged-in user is not an admin */
 function withAdmin(handler: AuthenticatedHandler): RouteHandler {
   return withAuth((request, user) => {
     if (user.role !== "admin") {
@@ -86,7 +86,7 @@ function isSubscribed(userId: string, serviceName: string): boolean {
     return false;
   }
   // A service without authentication is available by default, as per the
-  // assignment: it needs no subscription row.
+  // assignment: it needs no subscription row
   if (!service.requiresAuth) {
     return true;
   }
@@ -95,7 +95,7 @@ function isSubscribed(userId: string, serviceName: string): boolean {
   );
 }
 
-/* Strips internal fields so the response matches GET /widgets in API.md. */
+/* Strips internal fields so the response matches GET /widgets in API.md */
 function toWidgetInstance(widget: MockWidget) {
   return {
     id: widget.id,
@@ -166,7 +166,7 @@ function validateRefreshRate(refreshRate: unknown): string[] {
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * ONE_HOUR_MS;
 
-/* Builds a list of `count` items, falling back to `defaultCount`. */
+/* Builds a list of `count` items, falling back to `defaultCount` */
 function buildList<T>(count: unknown, defaultCount: number, buildItem: (index: number) => T): T[] {
   const length = Number(count) || defaultCount;
   return Array.from({ length }, (_unused, index) => buildItem(index));
@@ -174,7 +174,7 @@ function buildList<T>(count: unknown, defaultCount: number, buildItem: (index: n
 
 function generateFakeData(widgetTypeId: string, params: WidgetParams): Record<string, unknown> {
   // Derived from the params so that the same configuration always shows the
-  // same temperature, while Paris and Tokyo still differ.
+  // same temperature, while Paris and Tokyo still differ
   const variation = JSON.stringify(params).length % 15;
 
   switch (widgetTypeId) {
@@ -310,7 +310,7 @@ function handleRegister(request: MockRequest): MockResponse {
   persist();
 
   // The real server emails this link; the mock prints it in the browser
-  // console so the confirmation flow can be tested.
+  // console so the confirmation flow can be tested
   console.info(
     `[mock] verification link for ${normalizedEmail}: /auth/verify?token=${verificationToken}`
   );
@@ -328,7 +328,7 @@ function handleVerify(request: MockRequest): MockResponse {
   }
 
   user.isVerified = true;
-  user.verificationToken = null; // single-use link
+  user.verificationToken = null; // single use link
   persist();
   return successResponse({ message: "Account confirmed" });
 }
@@ -343,7 +343,7 @@ function handleLogin(request: MockRequest): MockResponse {
   const normalizedEmail = email.trim().toLowerCase();
   const user = db.users.find((candidate) => candidate.email === normalizedEmail);
 
-  // Same message for an unknown email and a wrong password, as on the server.
+  // Same message for an unknown email and a wrong password, as on the server
   if (!user || user.password !== password) {
     return errorResponse(401, "Invalid credentials");
   }
@@ -383,7 +383,7 @@ function handleListServices(_request: MockRequest, user: MockUser): MockResponse
 
 /*
  The real route redirects to the provider, which redirects back to the
- callback.
+ callback
  */
 function handleOAuthAuthorize(request: MockRequest, user: MockUser): MockResponse {
   const service = findService(request.params.service);
@@ -562,12 +562,60 @@ function handleListUsers(): MockResponse {
   return successResponse(users);
 }
 
+function handleSetUserRole(request: MockRequest): MockResponse {
+  const { role } = (request.body ?? {}) as { role?: string };
+
+  if (role !== "user" && role !== "admin") {
+    return errorResponse(400, "Invalid input", ["role must be either 'user' or 'admin'"]);
+  }
+
+  const target = db.users.find((user) => user.id === request.params.id);
+  if (!target) {
+    return errorResponse(404, "User not found");
+  }
+
+  if (target.id === db.sessionUserId && role === "user") {
+    return errorResponse(409, "Tu ne peux pas retirer ton propre rôle d'administrateur.");
+  }
+  if (
+    target.role === "admin" &&
+    role === "user" &&
+    db.users.filter((user) => user.role === "admin").length <= 1
+  ) {
+    return errorResponse(409, "Impossible de retirer le dernier administrateur de la plateforme.");
+  }
+
+  target.role = role;
+  persist();
+
+  return successResponse({
+    id: target.id,
+    email: target.email,
+    role: target.role,
+    isVerified: target.isVerified,
+    createdAt: target.createdAt,
+    widgetCount: db.widgets.filter((widget) => widget.userId === target.id).length,
+    linkedServiceCount: db.subscriptions.filter((s) => s.userId === target.id).length,
+  });
+}
+
 function handleDeleteUser(request: MockRequest): MockResponse {
   const userId = request.params.id;
-  const userExists = db.users.some((user) => user.id === userId);
+  const target = db.users.find((user) => user.id === userId);
 
-  if (!userExists) {
+  if (!target) {
     return errorResponse(404, "User not found");
+  }
+
+  /*
+   The same safeguards as the server, so the mock never teaches a behaviour
+   the real API refuses the whole point of keeping it in step with API.md.
+  */
+  if (userId === db.sessionUserId) {
+    return errorResponse(409, "Tu ne peux pas supprimer ton propre compte depuis l'administration.");
+  }
+  if (target.role === "admin" && db.users.filter((user) => user.role === "admin").length <= 1) {
+    return errorResponse(409, "Impossible de supprimer le dernier administrateur de la plateforme.");
   }
 
   // Cascade, as ON DELETE CASCADE does on the real database.
@@ -591,31 +639,27 @@ interface Route {
 
 const routes: Route[] = [
   { method: "GET", pattern: "/about.json", handler: handleAbout },
-
   { method: "POST", pattern: "/auth/register", handler: handleRegister },
   { method: "GET", pattern: "/auth/verify", handler: handleVerify },
   { method: "POST", pattern: "/auth/login", handler: handleLogin },
   { method: "GET", pattern: "/auth/me", handler: withAuth(handleMe) },
   { method: "POST", pattern: "/auth/logout", handler: handleLogout },
-
   { method: "GET", pattern: "/services", handler: withAuth(handleListServices) },
   { method: "GET", pattern: "/oauth/:service/authorize", handler: withAuth(handleOAuthAuthorize) },
   { method: "DELETE", pattern: "/services/:service/subscription", handler: withAuth(handleUnlinkService) },
-
   { method: "GET", pattern: "/widget-types", handler: withAuth(handleListWidgetTypes) },
-
   { method: "GET", pattern: "/widgets", handler: withAuth(handleListWidgets) },
   { method: "POST", pattern: "/widgets", handler: withAuth(handleCreateWidget) },
   { method: "PATCH", pattern: "/widgets/:id", handler: withAuth(handleUpdateWidget) },
   { method: "DELETE", pattern: "/widgets/:id", handler: withAuth(handleDeleteWidget) },
   { method: "GET", pattern: "/widgets/:id/data", handler: withAuth(handleWidgetData) },
-
   { method: "GET", pattern: "/admin/users", handler: withAdmin(handleListUsers) },
+  { method: "PATCH", pattern: "/admin/users/:id/role", handler: withAdmin(handleSetUserRole) },
   { method: "DELETE", pattern: "/admin/users/:id", handler: withAdmin(handleDeleteUser) },
 ];
 
 /*
- Matches a route pattern against a path and extracts its parameters.
+ Matches a route pattern against a path and extracts its parameters
  */
 function matchPattern(pattern: string, path: string): Record<string, string> | null {
   const patternSegments = pattern.split("/").filter(Boolean);
@@ -641,7 +685,7 @@ function matchPattern(pattern: string, path: string): Record<string, string> | n
   return extractedParams;
 }
 
-/* Entry point used by api.ts: finds the matching route and runs it. */
+/* Entry point used by api.ts: finds the matching route and runs it */
 export function handle(method: string, url: string, body: unknown): MockResponse {
   const [path, queryString = ""] = url.split("?");
   const upperMethod = method.toUpperCase();
@@ -662,6 +706,5 @@ export function handle(method: string, url: string, body: unknown): MockResponse
       });
     }
   }
-
   return errorResponse(404, `No mock route for ${upperMethod} ${path}`);
 }

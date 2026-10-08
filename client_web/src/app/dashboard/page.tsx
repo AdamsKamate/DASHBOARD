@@ -7,6 +7,7 @@ import { Button, Card, FormError } from "@/components/ui";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { AddWidgetModal } from "@/components/dashboard/AddWidgetModal";
 import { ServiceIcons } from "@/components/dashboard/ServiceIcons";
+import { SettingsMenu } from "@/components/SettingsMenu";
 import { api, ApiError, USE_MOCK } from "@/lib/api";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { RequireAuth } from "@/lib/auth/guards";
@@ -131,6 +132,20 @@ function DashboardContent() {
           {/* State of every service at a glance, and a shortcut to linking
               one. The Services button stays: it is where unlinking lives. */}
           <ServiceIcons services={services} />
+
+          <SettingsMenu />
+
+          {/* Shown only to administrators. The server refuses the page to
+              anyone else anyway; hiding the link spares the others a door
+              that does not open. */}
+          {user?.role === "admin" && (
+            <Link
+              href="/admin"
+              className="rounded-md border border-line px-3 py-2 text-sm text-white hover:border-signal"
+            >
+              Administration
+            </Link>
+          )}
 
           <Link href="/services">
             <Button variant="secondary">Services</Button>

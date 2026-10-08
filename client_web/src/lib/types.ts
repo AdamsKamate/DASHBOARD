@@ -1,9 +1,9 @@
-// Types of the API contract.
+// Types of the API contract
 
 export type Role = "user" | "admin";
 export type ParamType = "string" | "integer";
 
-/* Uniform error body returned by every failing route. */
+/* Uniform error body returned by every failing route */
 export interface ApiErrorBody {
   error: string;
   details?: string[];
@@ -70,8 +70,7 @@ export interface WidgetParamOption {
 
 /*
  A param as GET /widget-types describes it: about.json's { name, type } plus
- what the configuration form needs. Everything but `required` is optional,
- so a param declared with name and type alone still renders as a text field.
+ what the configuration form needs
  */
 export interface WidgetTypeParam extends AboutParam {
   required?: boolean;
@@ -145,4 +144,8 @@ export interface AdminUser {
   role: Role;
   isVerified: boolean;
   createdAt: string;
+  /* How many widgets this account has, so the list shows who uses it */
+  widgetCount: number;
+  /* How many third-party accounts are linked */
+  linkedServiceCount: number;
 }
