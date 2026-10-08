@@ -3,18 +3,21 @@ module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      /*
+       Colours are CSS variables rather than fixed values, so one attribute on
+       <html> swaps the whole palette
+      */
       colors: {
-        ink: "#0D1117",      // page background
-        surface: "#161B22",  // cards and inputs, one step above the background
-        raised: "#1C2230",   // card headers
-        line: "#30363D",     // borders
-        signal: "#58A6FF",   // primary actions and links
-        flare: "#F85149",    // errors
-        pulse: "#3FB950",    // success
-        amber: "#D29922",    // warnings
-        muted: "#9BA7B8",
-        
-        "line-strong": "#57616F",
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        raised: "rgb(var(--color-raised) / <alpha-value>)",
+        line: "rgb(var(--color-line) / <alpha-value>)",
+        signal: "rgb(var(--color-signal) / <alpha-value>)",
+        flare: "rgb(var(--color-flare) / <alpha-value>)",
+        pulse: "rgb(var(--color-pulse) / <alpha-value>)",
+        amber: "rgb(var(--color-amber) / <alpha-value>)",
+        muted: "rgb(var(--color-muted) / <alpha-value>)",
+        "line-strong": "rgb(var(--color-line-strong) / <alpha-value>)",
       },
 
       // Typography

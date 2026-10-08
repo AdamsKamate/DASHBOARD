@@ -1,4 +1,5 @@
 import "./globals.css";
+import { SettingsProvider } from "@/lib/settings/SettingsProvider";
 import { AuthProvider } from "../lib/auth/AuthProvider";
 
 export const metadata = {
@@ -8,16 +9,13 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <body>
         {/*
           Skip link, first in the tab order and invisible until focused
           Without it, a keyboard user reaching the dashboard has to tab past
           the header, then through every widget's move handle, refresh and
-          delete buttons before arriving anywhere useful. With twelve widgets
-          that is thirty-odd presses on every page load
-          It only appears on focus, which is the standard pattern: sighted
-          mouse users never see it, keyboard users find it immediately
+          delete buttons before arriving anywhere useful
         */}
         <a
           href="#main-content"
@@ -29,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
 
         {/* Every page can read the session through useAuth() */}
-        <AuthProvider>{children}</AuthProvider>
+        <SettingsProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </SettingsProvider>
       </body>
     </html>
   );
