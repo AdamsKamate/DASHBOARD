@@ -11,25 +11,27 @@ import { ping, closePool } from "./db";
 import { connectRedis, redisSelfTest, pingRedis, closeRedis } from "./lib/redis";
 import servicesRouter from "./routes/services";
 import widgetsRouter from "./routes/widgets";
+import adminRouter from "./routes/admin";
 
 const app = express();
 const PORT = 8080; // required by the assignment, do not make configurable
 
-// Required for req.ip to return the client's real IP behind Docker,
+// Required for req.ip to return the client's real IP behind Docker
 app.set("trust proxy", true);
 const allowedOrigin = process.env.CLIENT_URL ?? "http://localhost:8081";
 app.use(cors({ origin: allowedOrigin, credentials: true }));
 
 app.use(express.json());
-// Parses the token cookie set by the login route into req.cookies.
+// Parses the token cookie set by the login route into req.cookies
 app.use(cookieParser());
 app.use(aboutRouter);
 app.use(authRouter);
 app.use(oauthRouter);
 app.use(servicesRouter);
-app.use(widgetsRouter); 
+app.use(widgetsRouter);
+app.use(adminRouter); 
 
-// Check that the database and Redis respond without opening psql or redis-cli.
+// Check that the database and Redis respond without opening psql or redis cli
 app.get("/health", async (_req, res) => {
   const [dbOk, redisOk] = await Promise.all([ping(), pingRedis()]);
   const ok = dbOk && redisOk;
@@ -41,7 +43,7 @@ app.get("/health", async (_req, res) => {
 });
 
 /*
- Unknown route: answer JSON, like every other route.
+ Unknown route: answer JSON, like every other route
  */
 app.use((req, res) => {
   res.status(404).json({ error: `Unknown route: ${req.method} ${req.path}` });
@@ -82,5 +84,4 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.exit(0);
   });
 }
-
 start();
