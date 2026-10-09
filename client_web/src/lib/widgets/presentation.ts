@@ -6,7 +6,7 @@ export interface WidgetPresentation {
   /* An emoji standing in for an icon set we do not have */
   icon: string;
   /*
-   The field to show large, and its unit field when there is one.
+   The field to show large, and its unit field when there is one
    */
   headline?: { valueKey: string; unitKey?: string; captionKey?: string };
 }
@@ -30,7 +30,19 @@ const PRESENTATIONS: Record<string, WidgetPresentation> = {
   },
   github_issues: {
     title: "Issues",
-    icon: "🐛",
+    icon: "⚠️",
+  },
+  github_pull_requests: {
+    title: "Pull requests",
+    icon: "🔀",
+  },
+  github_releases: {
+    title: "Versions publiées",
+    icon: "🚀",
+  },
+  github_repo_stats: {
+    title: "Statistiques du dépôt",
+    icon: "📊",
   },
   google_calendar_next: {
     title: "Google Agenda",
@@ -102,6 +114,26 @@ const FIELD_LABELS: Record<string, string> = {
 
   // GitHub
   repo: "Dépôt",
+  description: "Description",
+  commitCount: "Commits",
+  contributorCount: "Contributeurs",
+  languages: "Langages",
+  stars: "Étoiles",
+  forks: "Forks",
+  watchers: "Observateurs",
+  openIssuesAndPullRequests: "Issues et PR ouvertes",
+  language: "Langage",
+  license: "Licence",
+  defaultBranch: "Branche par défaut",
+  visibility: "Visibilité",
+  archived: "Archivé",
+  lastPush: "Dernier push",
+  pullRequests: "Pull requests",
+  releases: "Versions",
+  tag: "Étiquette",
+  publishedAt: "Publiée le",
+  branch: "Branche",
+  sha: "Empreinte",
   commits: "Commits",
   message: "Message",
   author: "Auteur",

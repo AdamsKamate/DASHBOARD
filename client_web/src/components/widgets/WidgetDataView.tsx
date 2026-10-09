@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { WidgetData } from "@/lib/types";
 import { classifyWidgetError, errorStyleFor } from "@/lib/widgets/errors";
 import { WeatherView } from "./WeatherView";
+import { LanguageBar, isLanguageShares } from "./LanguageBar";
 import type { WidgetPresentation } from "@/lib/widgets/presentation";
 import {
   displayableKeys,
@@ -199,9 +200,22 @@ function RecordView({
   }
   return (
     <dl className="flex flex-col gap-2">
-      {keys.map((key) => (
-        <ValueView key={key} label={labelFor(key)} value={record[key]} unit={unitFor(record, key)} />
-      ))}
+      {keys.map((key) => {
+        const value = record[key];
+
+        /*
+         A language breakdown is the one field whose generic rendering would
+         lose the point: as rows, "JavaScript 53,6" twelve times says much
+         less than one bar does at a glance.
+        */
+        if (key === "languages" && isLanguageShares(value)) {
+          return <LanguageBar key={key} languages={value} />;
+        }
+
+        return (
+          <ValueView key={key} label={labelFor(key)} value={value} unit={unitFor(record, key)} />
+        );
+      })}
     </dl>
   );
 }

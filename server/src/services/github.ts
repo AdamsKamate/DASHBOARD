@@ -21,11 +21,6 @@ function getOAuthConfig(): OAuthConfig {
     redirectUri:
       process.env.GITHUB_REDIRECT_URI ?? "http://localhost:8080/oauth/github/callback",
     scope: SCOPES,
-    /*
-     GitHub OAuth Apps issue tokens that never expire and no refresh token:
-     no access_type / prompt equivalent is needed. allow_signup=false keeps
-     the consent screen from offering to create a GitHub account
-     */
     extraAuthorizationParams: {
       allow_signup: "false",
     },
@@ -102,6 +97,15 @@ interface PullRequestResponse {
   base: { ref: string };
 }
 
+/* Bytes of code written in each language, as GitHub counts them */
+type LanguagesResponse = Record<string, number>;
+
+interface ContributorResponse {
+  login?: string;
+  /* Commits this person authored on the default branch */
+  contributions: number;
+}
+
 interface ReleaseResponse {
   name: string | null;
   tag_name: string;
@@ -137,7 +141,7 @@ const COUNT_PARAM: WidgetParam = {
   max: MAX_ITEMS,
 };
 
-// Parameter reading. An empty value always means "no filter".
+// Parameter reading. An empty value always means "no filter"
 
 /* Same rules as the Google widgets, so every "count" behaves the same */
 function readCountParam(params: Params): number {
@@ -154,11 +158,30 @@ function readCountParam(params: Params): number {
 }
 
 /*
+ An integer param kept inside the bounds its own declaration states
+ */
+function readBoundedInteger(params: Params, param: WidgetParam): number {
+  const raw = params[param.name];
+  const value =
+    raw === undefined || raw === "" ? Number(param.default ?? 1) : Number(raw);
+  const minimum = param.min ?? 1;
+  const maximum = param.max ?? Number.MAX_SAFE_INTEGER;
+
+  if (!Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new ExternalApiError(
+      "rejected",
+      `Le paramètre « ${param.name} » doit être un entier entre ${minimum} et ${maximum}`
+    );
+  }
+  return value;
+}
+
+/*
  "owner/name", as shown in the repository URL
  */
 function readRepoParam(params: Params): { owner: string; name: string } {
   /*
-   Users naturally paste the repository URL: "https://github.com/owner/name",
+  naturally paste the repository URL: "https://github.com/owner/name",
    "github.com/owner/name/tree/main", "git@github.com:owner/name.git"...
    Everything around "owner/name" is stripped before checking it
    */
@@ -190,7 +213,7 @@ function readOptionalString(params: Params, name: string): string | null {
 
 /*
  A param restricted to the values of its `options`. Empty means `fallback`,
- which is the "all" value of the filter.
+ which is the "all" value of the filter
  */
 function readChoice(params: Params, param: WidgetParam, fallback: string): string {
   const value = (readOptionalString(params, param.name) ?? fallback).toLowerCase();
@@ -241,7 +264,7 @@ function repoLabel(repo: { owner: string; name: string }): string {
 /*
  Every widget returns data shaped for the generic WidgetDataView: lists are
  arrays of flat records whose headline is "title" or "message", a "url" field
- becomes an "Ouvrir" link, and empty strings or nulls are hidden.
+ becomes an "Ouvrir" link, and empty strings or nulls are hidden
  */
 
 // github_commits
@@ -388,8 +411,6 @@ const issues: WidgetDefinition = {
   async fetch(params, token) {
     const repo = readRepoParam(params);
     const state = readChoice(params, STATE_PARAM, "all");
-    // "bug, urgent" -> "bug,urgent": GitHub keeps the issues carrying ALL
-    // the listed labels, so the separator must be a bare comma.
     const labels = readLabelsParam(params);
     const assignee = readLoginParam(params, "assignee");
     const sort = readChoice(params, ISSUES_SORT_PARAM, "updated");
@@ -420,7 +441,7 @@ const issues: WidgetDefinition = {
 
     /*
      Shaped for the generic WidgetDataView: each issue is a row whose
-     headline is "title".
+     headline is "title"
      */
     return {
       repo: repoLabel(repo),
@@ -571,26 +592,133 @@ const releases: WidgetDefinition = {
 
 // github_repo_stats
 
+/*
+ A language holding less than this is folded into "Autres": a bar made of
+ twelve slivers of one pixel tells the reader nothing
+ */
+const MIN_LANGUAGE_PERCENT = 0.5;
+
+const MAX_LANGUAGES_PARAM: WidgetParam = {
+  name: "maxLanguages",
+  type: "integer",
+  label: "Langages affichés",
+  default: 5,
+  min: 2,
+  max: 10,
+  help: "Les langages suivants sont regroupés sous « Autres ».",
+};
+
+/*
+ Turns GitHub's bytes per language into the shares the bar draws
+ */
+export function toLanguageShares(
+  bytesPerLanguage: LanguagesResponse,
+  maxLanguages: number
+): Array<{ name: string; percent: number }> {
+  const totalBytes = Object.values(bytesPerLanguage).reduce((sum, bytes) => sum + bytes, 0);
+  if (totalBytes === 0) {
+    return [];
+  }
+
+  const roundToOneDecimal = (value: number) => Math.round(value * 10) / 10;
+
+  const sortedShares = Object.entries(bytesPerLanguage)
+    .map(([name, bytes]) => ({ name, percent: roundToOneDecimal((bytes / totalBytes) * 100) }))
+    .sort((left, right) => right.percent - left.percent);
+
+  /*
+   The kept languages are a prefix of the sorted list, so counting how many
+   qualify is enough to know where the remainder starts
+   */
+  let keptCount = 0;
+  while (
+    keptCount < sortedShares.length &&
+    keptCount < maxLanguages &&
+    sortedShares[keptCount].percent >= MIN_LANGUAGE_PERCENT
+  ) {
+    keptCount += 1;
+  }
+
+  const kept = sortedShares.slice(0, keptCount);
+  const remainderPercent = roundToOneDecimal(
+    sortedShares.slice(keptCount).reduce((sum, share) => sum + share.percent, 0)
+  );
+
+  return remainderPercent > 0 ? [...kept, { name: "Autres", percent: remainderPercent }] : kept;
+}
+
+/*
+ A secondary call whose failure must not take the widget down
+ */
+async function fetchSecondary<T>(
+  url: string,
+  headers: Record<string, string>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await fetchJson<T>(url, { headers });
+  } catch (error) {
+    const isAbsence =
+      error instanceof ExternalApiError &&
+      (error.failure === "rejected" || error.failure === "unreadable");
+    if (isAbsence) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 const repoStats: WidgetDefinition = {
   name: "github_repo_stats",
-  description: "Affiche les statistiques d'un dépôt : étoiles, forks, issues ouvertes, langage",
-  params: [REPO_PARAM],
+  description:
+    "Affiche l'activité d'un dépôt : commits, contributeurs, répartition des langages, forks et issues",
+  params: [REPO_PARAM, MAX_LANGUAGES_PARAM],
 
   async fetch(params, token) {
     const repo = readRepoParam(params);
-    const repository = await fetchJson<RepositoryResponse>(repoPath(repo), {
-      headers: githubHeaders(requireToken(token)),
-    });
+    const maxLanguages = readBoundedInteger(params, MAX_LANGUAGES_PARAM);
+    const headers = githubHeaders(requireToken(token));
 
-    // Flat scalars: the generic view shows them as a key/value list
+    /*
+     Three calls instead of one
+     */
+    const [repository, bytesPerLanguage, contributors] = await Promise.all([
+      fetchJson<RepositoryResponse>(repoPath(repo), { headers }),
+      fetchSecondary<LanguagesResponse>(`${repoPath(repo)}/languages`, headers, {}),
+      /*
+       anon=1 counts the commits whose email matches no GitHub account, so the
+       total matches the one shown on the repository page
+       */
+      fetchSecondary<ContributorResponse[]>(
+        `${repoPath(repo)}/contributors?per_page=100&anon=1`,
+        headers,
+        []
+      ),
+    ]);
+
+    /*
+     An empty list means the figure is unavailable, not that the repository
+     has no commits: GitHub answers 202 with no body while it computes a
+     contributor list for the first time, and 403 on very large repositories
+     */
+    const hasContributorData = contributors.length > 0;
+    const commitCount = hasContributorData
+      ? contributors.reduce((total, contributor) => total + contributor.contributions, 0)
+      : null;
+
     return {
       repo: repository.full_name,
       description: repository.description ?? "",
+      commitCount,
+      // Read by the generic view as the unit of "commitCount"
+      commitCountUnit: commitCount !== null && commitCount > 1 ? "commits" : "commit",
+      contributorCount: hasContributorData ? contributors.length : null,
+      // Rendered as a stacked bar rather than a key/value line
+      languages: toLanguageShares(bytesPerLanguage, maxLanguages),
       stars: repository.stargazers_count,
       forks: repository.forks_count,
       watchers: repository.subscribers_count ?? null,
       openIssuesAndPullRequests: repository.open_issues_count,
-      language: repository.language ?? "",
       license: repository.license?.name ?? "",
       defaultBranch: repository.default_branch,
       visibility: repository.private ? "privé" : "public",
